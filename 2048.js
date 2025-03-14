@@ -1,4 +1,4 @@
-// Script to play 2048 at https://2048game.com/ via console 
+// AI Script to play 2048 at https://2048game.com/ via console 
 (function() {
     // Debug mode
     const DEBUG = false;
@@ -752,6 +752,16 @@
                   if (maxTile > highestTile) {
                       highestTile = maxTile;
                       console.log(`New highest tile: ${highestTile}`);
+                      
+                      // If we've achieved 2048, slow down and try to maintain it
+                      if (maxTile >= 2048) {
+                          console.log("🎉 Reached 2048 tile! Trying to maintain it...");
+                          // Adjust weights to preserve the 2048 tile
+                          emptyWeight = 300;
+                          mergeWeight = 900;
+                          monotonicityWeight = 50;
+                          cornerWeight = 30;
+                      }
                   }
               }
               
@@ -931,7 +941,7 @@
   
   // Expose single-letter control functions globally
   window.s = s; // start
-  window.q = q; // quit/stop
+  window.q = q; // quit/stop playing
   window.n = n; // new game
   window.i = i; // info/debug
   window.p = p; // set pattern
