@@ -1,3 +1,4 @@
+// Script to play 2048 at https://2048game.com/ via console 
 (function() {
     // Debug mode
     const DEBUG = false;
