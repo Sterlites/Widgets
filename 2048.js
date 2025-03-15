@@ -1,8 +1,33 @@
-// AI Script to play 2048 at https://2048game.com/ via console
+// AI Script to play 2048 at https://2048game.com/ via console. Simply copy this whole script and paste in console of your browser to start the AI Bot.
 (function () {
   // Debug mode
   const DEBUG = false;
+// Add this at the top of your script
+let schedulingDebug = true;
+// At the top, with other variable declarations
+const COLORS = {
+  primary: "#3498db",
+  success: "#2ecc71",
+  warning: "#f39c12", 
+  error: "#e74c3c",
+  info: "#9b59b6",
+  muted: "#7f8c8d",
+  header: "#2c3e50",
+  background: "#f0f0f0"
+};
 
+// Replace the simple console.statsLog function with this enhanced version
+console.statsLog = function(msg, style = "") {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`%c[${timestamp}] ${msg}`, style || `color: ${COLORS.primary}`);
+};
+// At the top of your script, with other state variables
+const GAME_LOOP = {
+  active: false,
+  timeoutId: null,
+  frameId: null,
+  lastStepTime: 0
+};
   // Performance tracking
   const PERFORMANCE = {
     moveCount: 0,
@@ -11,7 +36,7 @@
     highestTile: 0,
     startTime: Date.now(),
     moveHistory: [],
-    speedSetting: "normal",
+    speedSetting: "turbo",
     moveDelay: 100,
     kpi: {
       movesPerSecond: 0,
@@ -28,6 +53,12 @@
     normal: 100,
     slow: 200,
   };
+// Add this at the beginning of your script, with other variables
+const CONSOLE_STATE = {
+  statsInitialized: false,
+  statsElement: null
+};
+
 
   // Game state tracking
   let gameRunning = true;
@@ -44,6 +75,8 @@
   let smoothnessWeight = 25.0;
   let chainWeight = 40.0;
   let maxDepthReached = 0;
+  // Add this variable at the top with other globals
+let gameLoopTimeout = null;
 
   // Enhanced pattern strategies
   const patterns = {
@@ -79,6 +112,7 @@
 
   // Function to get the current game state from the DOM
   function getGameState() {
+    if(DEBUG)console.log("getGameState(); - Getting game state...");
     const tiles = document.querySelectorAll(".tile");
     if (!tiles || tiles.length === 0) {
       if (DEBUG)
@@ -1164,180 +1198,315 @@
     return validMoves[0].action;
   }
 
-  // Main game loop with adaptive timing
-  function gameStep() {
-    if (!gameRunning) return;
 
-    const startTime = Date.now();
-    try {
-      // Check if game is over
-      if (isGameOver()) {
-        const score =
-          document.querySelector(".score-container")?.textContent || "Unknown";
-        console.log(
-          `%cGame over! Final score: ${score}`,
-          "color: green; font-weight: bold;"
-        );
-        console.log(`Total moves: ${moveCount}`);
-        console.log(`Highest tile: ${highestTile}`);
-        console.log(`Maximum search depth reached: ${maxDepthReached}`);
-        q();
-        return;
+// Consolidated function to clear any existing game loop
+function clearGameLoop() {
+  if (GAME_LOOP.timeoutId) {
+    clearTimeout(GAME_LOOP.timeoutId);
+    GAME_LOOP.timeoutId = null;
+  }
+  
+  if (GAME_LOOP.frameId) {
+    cancelAnimationFrame(GAME_LOOP.frameId);
+    GAME_LOOP.frameId = null;
+  }
+  
+  GAME_LOOP.active = false;
+  if (DEBUG) console.log("Game loop cleared");
+}
+
+// Schedule the next game step
+function scheduleNextStep(delay = PERFORMANCE.moveDelay) {
+  if (!gameRunning) return;
+  
+  clearGameLoop(); // Clear any existing scheduled steps
+  
+  GAME_LOOP.active = true;
+  GAME_LOOP.timeoutId = setTimeout(() => {
+    // Use requestAnimationFrame for better syncing with browser rendering
+    GAME_LOOP.frameId = requestAnimationFrame(() => {
+      if (gameRunning) {
+        GAME_LOOP.lastStepTime = performance.now();
+        gameStep();
       }
+    });
+  }, delay);
+  
+  if (DEBUG) console.log(`Next step scheduled in ${delay}ms`);
+}
 
-      // Get the next move
-      const nextMove = decideNextMove();
+// Debug logging function
+function debugLog(message, style = "") {
+  if (DEBUG) {
+    console.log(message, style || `color: ${COLORS.primary}`);
+  }
+}
 
-      if (nextMove) {
-        nextMove();
-        updatePerformance(true, maxDepthReached, startTime);
-        moveCount++;
+// Reset weights to defaults
+function resetWeights() {
+  monotonicityWeight = 47.0;
+  emptyWeight = 270.0;
+  mergeWeight = 700.0;
+  cornerWeight = 20.0;
+  smoothnessWeight = 20.0;
+  chainWeight = 30.0;
+  if (DEBUG) console.log("Weights reset to defaults");
+}
 
-        // Update highest tile
-        const grid = getGameState();
-        if (grid) {
-          const maxTile = Math.max(...grid.flat().filter((n) => !isNaN(n)));
-          if (maxTile > highestTile) {
-            highestTile = maxTile;
-            console.log(`New highest tile: ${highestTile}`);
+// Reset performance tracking
+function resetPerformance() {
+  PERFORMANCE.startTime = Date.now();
+  PERFORMANCE.moveCount = 0;
+  PERFORMANCE.moveHistory = [];
+  PERFORMANCE.highestTile = 0;
+  PERFORMANCE.avgMoveTime = 0;
+  PERFORMANCE.totalTime = 0;
+  PERFORMANCE.kpi = {
+    movesPerSecond: 0,
+    successRate: 0,
+    averageDepth: 0,
+    efficiency: 0,
+  };
+  updateLiveStats();
+}
 
-            // If we've achieved 2048, celebrate but keep playing
-            if (maxTile >= 2048 && maxTile < 4096) {
-              console.log("🎉🎉🎉 REACHED 2048 TILE! 🎉🎉🎉");
-              // Adjust weights to preserve the structure
-              emptyWeight = 250;
-              mergeWeight = 700;
-              monotonicityWeight = 60;
-              cornerWeight = 40;
-              smoothnessWeight = 30;
-              chainWeight = 50;
-            } else if (maxTile >= 4096) {
-              console.log("🏆🏆🏆 AMAZING! REACHED 4096 TILE! 🏆🏆🏆");
-              // Special weights for ultra-high scores
-              emptyWeight = 230;
-              mergeWeight = 650;
-              monotonicityWeight = 70;
-              cornerWeight = 50;
-              smoothnessWeight = 35;
-              chainWeight = 60;
-            }
-          }
-        }
+// Celebrate milestone tiles
+function celebrateMilestones(maxTile) {
+  if (maxTile >= 2048 && maxTile < 4096) {
+    console.log(`%c╔════════════════════════════════════════════════════════════╗
+      ║                                                            ║
+      ║              🎉  REACHED 2048 TILE!  🎉                    ║
+      ║                                                            ║
+      ╚════════════════════════════════════════════════════════════╝`, 
+      `color: ${COLORS.warning}; font-weight: bold; font-size: 14px;`);
+    // Adjust weights to preserve the structure
+    emptyWeight = 250;
+    mergeWeight = 700;
+    monotonicityWeight = 60;
+    cornerWeight = 40;
+    smoothnessWeight = 30;
+    chainWeight = 50;
+  } else if (maxTile >= 4096) {
+    console.log(`%c╔════════════════════════════════════════════════════════════╗
+      ║                                                            ║
+      ║           🏆  AMAZING! REACHED 4096 TILE!  🏆              ║
+      ║                                                            ║
+      ╚════════════════════════════════════════════════════════════╝`, 
+      `color: ${COLORS.error}; font-weight: bold; font-size: 14px;`);
+    // Special weights for ultra-high scores
+    emptyWeight = 230;
+    mergeWeight = 650;
+    monotonicityWeight = 70;
+    cornerWeight = 50;
+    smoothnessWeight = 35;
+    chainWeight = 60;
+  }
+}
 
-        if (moveCount % 100 === 0) {
-          console.log(
-            `Moves played: ${moveCount}, Highest tile: ${highestTile}, Pattern: ${currentPattern}`
-          );
-          console.log(
-            `Target corner: Row ${targetCorner.row}, Col ${targetCorner.col}`
-          );
-        }
+// Display final stats when game ends
+function displayFinalStats() {
+  console.log(`%c    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+    ┃                           BOT STOPPED                              ┃
+    ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+    ┃ Total Moves: %c${moveCount}%c                                                   ┃
+    ┃ Highest Tile: %c${highestTile}%c                                                  ┃
+    ┃ Runtime: %c${Math.floor(PERFORMANCE.totalTime / 1000)}s%c                                                       ┃
+    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 
+    `color: ${COLORS.error};`, 
+    `color: ${COLORS.primary}; font-weight: bold;`, `color: ${COLORS.error};`,
+    `color: ${COLORS.warning}; font-weight: bold;`, `color: ${COLORS.error};`,
+    `color: ${COLORS.info};`, `color: ${COLORS.error};`);
+}
 
-        // Adaptive timing based on game state
-        let delay = 10; // Default fast pace
+// Helper function to process grid updates (extracted from gameStep)
+function processGridUpdate() {
+  const grid = getGameState();
+  if (grid) {
+    const maxTile = Math.max(...grid.flat().filter((n) => !isNaN(n)));
+    if (maxTile > highestTile) {
+      highestTile = maxTile;
+      PERFORMANCE.highestTile = maxTile;
+      console.statsLog(`New highest tile: ${highestTile}`, `color: ${COLORS.warning}; font-weight: bold; font-size: 14px;`);
 
-        // Slow down when board is getting more complex
-        const currentGrid = getGameState();
-        if (currentGrid) {
-          const emptyCount = currentGrid
-            .flat()
-            .filter((cell) => cell === 0).length;
-          const maxTile = Math.max(
-            ...currentGrid.flat().filter((n) => !isNaN(n))
-          );
-
-          // Be more careful when high tiles exist or few empty spaces
-          if (maxTile >= 2048 || emptyCount <= 2) {
-            delay = 100; // Very slow for critical situations
-          } else if (maxTile >= 1024 || emptyCount <= 4) {
-            delay = 60; // Slower for challenging situations
-          } else if (maxTile >= 512 || emptyCount <= 6) {
-            delay = 30; // Medium speed
-          }
-        }
-
-        setTimeout(gameStep, PERFORMANCE.moveDelay);
-      } else {
-        updatePerformance(false, 0, startTime);
-        console.log("No valid moves found - game may be stuck.");
-        // Try one more time after a delay
-        setTimeout(() => {
-          // Try random move as last resort
-          const randomMove = [u, d, l, r][Math.floor(Math.random() * 4)];
-          randomMove();
-          moveCount++;
-          setTimeout(gameStep, 100);
-        }, 250);
-      }
-    } catch (e) {
-      console.error("Error in game loop:", e);
-      updatePerformance(false, 0, startTime);
-      q();
+      // Milestone celebrations and weight adjustments
+      celebrateMilestones(maxTile);
     }
   }
+}
 
-  // Function to start auto-play
-  function s() {
-    // start
-    if (gameRunning) {
+// Updated gameStep function
+function gameStep() {
+  if (!gameRunning || !GAME_LOOP.active) {
+    debugLog("Game not running or loop inactive. Exiting game step.");
+    return;
+  }
+
+  const startTime = Date.now();
+  try {
+    // Check if game is over
+    if (isGameOver()) {
+      const score = document.querySelector(".score-container")?.textContent || "Unknown";
+      console.statsLog(`🏆 Game over! Final score: ${score}`, "color: green; font-weight: bold;");
+      console.statsLog(`Total moves: ${moveCount}`, "color: green;");
+      console.statsLog(`Highest tile: ${highestTile}`, "color: green;");
+      console.statsLog(`Maximum search depth reached: ${maxDepthReached}`, "color: green;");
       q();
+      return;
     }
 
-    console.log("🎮 AI playing 2048...");
-    moveCount = 0;
-    lastGridState = null;
-    stuckCounter = 0;
-    gameRunning = true;
-    highestTile = 0;
-    movePattern = [];
-    patternIndex = 0;
-    currentPattern = "snake";
+    // Get the next move
+    const nextMove = decideNextMove();
 
-    // Reset weights to defaults
-    monotonicityWeight = 47.0;
-    emptyWeight = 270.0;
-    mergeWeight = 700.0;
-    cornerWeight = 20.0;
-    smoothnessWeight = 20.0;
-    chainWeight = 30.0;
+    if (nextMove) {
+      console.statsLog(`Move ${moveCount + 1}: ${nextMove.name.toUpperCase()}`, `color: ${COLORS.primary}; font-weight: bold;`);
+      nextMove();
+      updatePerformance(true, maxDepthReached, startTime);
+      moveCount++;
 
-    // Reset performance tracking
-    PERFORMANCE.startTime = Date.now();
-    PERFORMANCE.moveCount = 0;
-    PERFORMANCE.moveHistory = [];
-    PERFORMANCE.highestTile = 0;
-    PERFORMANCE.avgMoveTime = 0;
-    updateLiveStats();
-
-    // Start the game loop with initial delay
-    setTimeout(gameStep, 100);
-    return "Bot started!";
-  }
-
-  // Function to stop auto-play
-  function q() {
-    // quit
-    gameRunning = false;
-    console.log(
-      `%cAuto-play stopped after ${moveCount} moves. Highest tile: ${highestTile}`,
-      "color: blue; font-weight: bold;"
-    );
-    return "Bot stopped!";
-  }
-
-  // Function to restart the game and begin playing again
-  function n() {
-    // new game
-    const restartButton = document.querySelector(".restart-button");
-    if (restartButton) {
-      restartButton.click();
-      setTimeout(s, 500); // Start playing after a short delay
-      return "Game restarted!";
+      // Process grid updates and stats
+      processGridUpdate();
+      
+      // Schedule the next step
+      scheduleNextStep();
     } else {
-      console.log("Restart button not found.");
-      return "Restart button not found.";
+      updatePerformance(false, 0, startTime);
+      debugLog("No valid moves found - game may be stuck.");
+      // Try one more time after a delay
+      scheduleNextStep(300); // Longer delay when stuck
+    }
+  } catch (e) {
+    console.error("Error in game loop:", e);
+    updatePerformance(false, 0, startTime);
+    // Try to recover instead of quitting
+    if (gameRunning) {
+      debugLog("Attempting to recover from error...");
+      scheduleNextStep(500); // Even longer delay for recovery
+    } else {
+      q();
     }
   }
+}
+
+// Updated start function
+function s() {
+  console.statsLog("🎮 AI playing 2048...");
+  
+  // Stop any existing game
+  q();
+  
+  // Reset game state
+  moveCount = 0;
+  lastGridState = null;
+  stuckCounter = 0;
+  gameRunning = true;
+  movePattern = [];
+  patternIndex = 0;
+  currentPattern = "snake";
+  CONSOLE_STATE.statsInitialized = false;
+  maxDepthReached = 0;
+
+  // Reset weights to defaults
+  resetWeights();
+
+  // Reset performance tracking
+  resetPerformance();
+  
+  // Start the game loop with a safe approach
+  GAME_LOOP.active = true;
+  GAME_LOOP.frameId = requestAnimationFrame(() => {
+    GAME_LOOP.lastStepTime = performance.now();
+    gameStep();
+  });
+  
+  return "Bot started!";
+}
+
+// Updated quit function
+function q() {
+  console.statsLog("🛑 Stopping auto-play...");
+  gameRunning = false;
+  clearGameLoop();
+  
+  // Display final stats
+  displayFinalStats();
+  
+  return "Bot stopped!";
+}
+
+// New restart function 
+function n() {
+  debugLog("Executing full restart sequence...", `color: blue; font-weight: bold`);
+  
+  // First stop any running game properly
+  gameRunning = false;
+  clearGameLoop();
+  
+  debugLog("Stopped current game", "color: orange");
+  
+  // Reset all necessary game state variables immediately
+  moveCount = 0;
+  lastGridState = null;
+  stuckCounter = 0;
+  movePattern = [];
+  patternIndex = 0;
+  currentPattern = "snake";
+  CONSOLE_STATE.statsInitialized = false;
+  maxDepthReached = 0;
+  
+  // Reset performance tracking
+  resetPerformance();
+  
+  // Create a sequence of requestAnimationFrame calls to ensure proper timing
+  function step1() {
+    // Click the restart button
+    const restartButton = document.querySelector(".restart-button");
+    if (!restartButton) {
+      console.error("Restart button not found!", "color: red; font-weight: bold");
+      return "Error: Restart button not found. Are you on the correct game page?";
+    }
+    
+    debugLog("Clicking restart button...", "color: green");
+    restartButton.click();
+    
+    // Wait for DOM to update after restart button click
+    requestAnimationFrame(step2);
+  }
+  
+  function step2() {
+    // Check if game appears to be in initial state
+    const grid = getGameState();
+    
+    // If we can't get the grid yet or it doesn't look reset, wait another frame
+    if (!grid || grid.flat().filter(cell => cell > 0).length > 2) {
+      debugLog("Waiting for game reset to complete...", "color: orange");
+      requestAnimationFrame(step2);
+      return;
+    }
+    
+    debugLog("Game reset confirmed, starting AI...", "color: green");
+    
+    // Set gameRunning back to true before starting
+    gameRunning = true;
+    
+    // Start the game with its own requestAnimationFrame to avoid nesting issues
+    requestAnimationFrame(function() {
+      debugLog("Starting new game...", "color: green");
+      s();
+      debugLog("Successfully started new game", "color: green; font-weight: bold");
+    });
+  }
+  
+  // Start the sequence
+  requestAnimationFrame(step1);
+  
+  return "Game restarting...";
+}
+
+// StatsLog function (always visible regardless of DEBUG setting)
+console.statsLog = function(msg, style = "") {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`%c[${timestamp}] ${msg}`, style || `color: ${COLORS.primary}`);
+};
 
   // Debug function
   function i() {
@@ -1492,43 +1661,129 @@
     updateLiveStats();
   }
 
-  // Live stats display
   function updateLiveStats() {
-    console.clear();
+    // Only update every 5 moves to reduce console spam
+    if (PERFORMANCE.moveCount % 5 !== 0 && PERFORMANCE.moveCount > 1) return;
+    
+    // Clear console for clean dashboard effect
+    if (typeof console.clear === 'function' && PERFORMANCE.moveCount > 10) {
+      console.clear();
+    }
+    
+    // Dashboard header
     console.log(
-      "%c2048 AI Performance Monitor",
-      "font-size: 14px; font-weight: bold; color: #2c3e50"
+      `%c┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`,
+      `color: ${COLORS.header}; font-weight: bold;`
     );
-    console.table({
-      "Game Stats": {
-        Moves: PERFORMANCE.moveCount,
-        "Highest Tile": PERFORMANCE.highestTile,
-        "Running Time": `${Math.floor(PERFORMANCE.totalTime / 1000)}s`,
-        "Speed Mode": PERFORMANCE.speedSetting,
-      },
-      Performance: {
-        "Moves/Second": PERFORMANCE.kpi.movesPerSecond,
-        "Success Rate %": PERFORMANCE.kpi.successRate,
-        "Avg Search Depth": PERFORMANCE.kpi.averageDepth,
-        "Efficiency Score": PERFORMANCE.kpi.efficiency,
-      },
-    });
+    console.log(
+      `%c┃                                 2048 AI DASHBOARD                               ┃`,
+      `color: ${COLORS.header}; font-weight: bold;`
+    );
+    console.log(
+      `%c┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`,
+      `color: ${COLORS.header}; font-weight: bold;`
+    );
+    
+    // Game stats
+    const runTime = Math.floor(PERFORMANCE.totalTime / 1000);
+    const minutes = Math.floor(runTime / 60);
+    const seconds = runTime % 60;
+    const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    
+    // Convert numeric values to strings first, then pad
+    const movesStr = PERFORMANCE.moveCount.toString().padStart(12);
+    const highestStr = highestTile.toString().padStart(12);
+    const movesPerSecStr = String(PERFORMANCE.kpi.movesPerSecond).padStart(8);
+    const successRateStr = String(PERFORMANCE.kpi.successRate).padStart(7);
+    const avgDepthStr = String(PERFORMANCE.kpi.averageDepth).padStart(8);
+    const efficiencyStr = String(PERFORMANCE.kpi.efficiency).padStart(8);
+    const speedStr = PERFORMANCE.speedSetting.toString().padStart(12);
+    
+    console.log(
+      `%c┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`,
+      `color: ${COLORS.primary};`
+    );
+    console.log(
+      `%c┃      GAME STATISTICS      ┃         PERFORMANCE METRICS                     ┃`,
+      `color: ${COLORS.primary}; font-weight: bold;`
+    );
+    console.log(
+      `%c┣━━━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫`,
+      `color: ${COLORS.primary};`
+    );
+    
+    console.log(
+      `%c┃ Moves:     %c${movesStr} %c  ┃ Moves/Second:  %c${movesPerSecStr} %c                        ┃`,
+      `color: ${COLORS.muted};`, `color: ${COLORS.info}; font-weight: bold;`, 
+      `color: ${COLORS.muted};`, `color: ${COLORS.success}; font-weight: bold;`, `color: ${COLORS.muted};`
+    );
+    
+    console.log(
+      `%c┃ Highest:   %c${highestStr} %c  ┃ Success Rate:  %c${successRateStr}% %c                        ┃`,
+      `color: ${COLORS.muted};`, `color: ${COLORS.warning}; font-weight: bold;`, 
+      `color: ${COLORS.muted};`, `color: ${COLORS.info}; font-weight: bold;`, `color: ${COLORS.muted};`
+    );
+    
+    console.log(
+      `%c┃ Runtime:   %c${timeString.padStart(12)} %c  ┃ Avg Depth:     %c${avgDepthStr} %c                        ┃`,
+      `color: ${COLORS.muted};`, `color: ${COLORS.info};`, 
+      `color: ${COLORS.muted};`, `color: ${COLORS.info}; font-weight: bold;`, `color: ${COLORS.muted};`
+    );
+    
+    console.log(
+      `%c┃ Mode:      %c${speedStr} %c  ┃ Efficiency:    %c${efficiencyStr} %c                        ┃`,
+      `color: ${COLORS.muted};`, `color: ${COLORS.primary};`, 
+      `color: ${COLORS.muted};`, `color: ${COLORS.success}; font-weight: bold;`, `color: ${COLORS.muted};`
+    );
+    
+    console.log(
+      `%c┗━━━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`,
+      `color: ${COLORS.primary};`
+    );
+    
+  // Commands reference (only shown occasionally)
+  if (PERFORMANCE.moveCount < 10 || PERFORMANCE.moveCount % 50 === 0) {
+    console.log(
+      `%c┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`,
+      `color: ${COLORS.muted};`
+    );
+    console.log(
+      `%c┃ COMMANDS: %cs()%c Start | %cq()%c Stop | %cn()%c New Game | %ci()%c Info | %cp('pattern')%c Pattern ┃`,
+      `color: ${COLORS.muted};`, `color: ${COLORS.success}; font-weight: bold;`, `color: ${COLORS.muted};`,
+      `color: ${COLORS.error}; font-weight: bold;`, `color: ${COLORS.muted};`,
+      `color: ${COLORS.primary}; font-weight: bold;`, `color: ${COLORS.muted};`,
+      `color: ${COLORS.info}; font-weight: bold;`, `color: ${COLORS.muted};`,
+      `color: ${COLORS.warning}; font-weight: bold;`, `color: ${COLORS.muted};`
+    );
+    console.log(
+      `%c┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`,
+      `color: ${COLORS.muted};`
+    );
   }
+}
 
-  console.log("2048 AI loaded! Use these single-letter commands:");
-  console.log("%c• s() - Start playing", "color: green");
-  console.log("%c• q() - Quit/stop playing", "color: red");
-  console.log("%c• n() - New game", "color: blue");
-  console.log("%c• i() - Show info/debug", "color: purple");
-  console.log(
-    "%c• p('pattern') - Change pattern (corner, snake, spiral)",
-    "color: orange"
-  );
-  console.log("%c• w('{\"empty\":300}') - Update weights", "color: cyan");
-  console.log("%c• u(), d(), l(), r() - Manual moves", "color: magenta");
-  console.log(
-    "%c• setSpeed('turbo'|'fast'|'normal'|'slow'|number) - Control speed",
-    "color: brown"
+console.log(`%c
+  ╔═══════════════════════════════════════════════════════════════════════════╗
+  ║                             2048 AI BOT LOADED                            ║
+  ╠═══════════════════════════════════════════════════════════════════════════╣
+  ║ %cs()%c - Start playing                  ║ %ci()%c - Show debug info            ║
+  ║ %cq()%c - Stop playing                   ║ %cp('pattern')%c - Change pattern    ║
+  ║ %cn()%c - New game                       ║ %cw('{json}')%c - Update weights     ║
+  ║ %cu()%c,%cd()%c,%cl()%c,%cr()%c - Manual moves          ║ %csetSpeed()%c - Control game speed   ║
+  ╚═══════════════════════════════════════════════════════════════════════════╝
+  `, 
+  `color: ${COLORS.header}; font-weight: bold;`,
+  `color: ${COLORS.success}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.info}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.error}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.warning}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.primary}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.muted}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.primary}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.primary}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.primary}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.primary}; font-weight: bold;`, `color: ${COLORS.header};`,
+  `color: ${COLORS.warning}; font-weight: bold;`, `color: ${COLORS.header};`
   );
 
   // Start auto-playing immediately
