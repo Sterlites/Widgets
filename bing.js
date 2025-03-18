@@ -1,12 +1,52 @@
+// Description: paste it in browser console three times to start searching on Bing
 javascript:(function(){
     function bingSearchAutomation(){
       console.log("[let's bing] Starting search automation");
       
       // Search terms
-      const terms=["algorithm","bandwidth","compiler","daemon","encryption","firmware","gateway","hypervisor","iteration","kernel","latency","middleware","namespace","orchestration","protocol","quantum","recursion","subnet","throughput","virtualization"];
+      const terms = [
+        "algorithm", "bandwidth", "compiler", "daemon", "encryption", "firmware", 
+        "gateway", "hypervisor", "iteration", "kernel", "latency", "middleware", 
+        "namespace", "orchestration", "protocol", "quantum", "recursion", "subnet", 
+        "throughput", "virtualization", "API", "authentication", "bitrate", "cache", 
+        "cloud", "cybersecurity", "data", "database", "debugging", "deployment", 
+        "DNS", "encryption", "firewall", "hashing", "hosting", "HTTP", "HTTPS", 
+        "integration", "IP", "JavaScript", "JSON", "load balancing", "machine learning", 
+        "memory", "metadata", "microservice", "network", "node", "object-oriented", 
+        "packet", "partition", "persistence", "ping", "query", "rate-limiting", 
+        "rendering", "repository", "scalability", "schema", "script", "SDK", 
+        "serialization", "session", "stack", "streaming", "syntax", "template", 
+        "thread", "token", "transaction", "UI", "UX", "virtual machine", "WAN", 
+        "websocket", "workload", "XML", "YAML", "zero-day", "ZKP", "ACL", "analytics", 
+        "big data", "blockchain", "CI/CD", "compression", "container", "cookie", 
+        "crawler", "daemon", "DevOps", "edge computing", "failover", "hash table", 
+        "IoT", "IPSec", "log file", "MFA", "NAT", "NVMe", "QoS", "rate-limiting",
+        "abstraction", "asynchronous", "back-end", "binary", "buffer", "bytecode", 
+        "cloud-native", "containerization", "cryptographic", "data structure", 
+        "decentralization", "encapsulation", "event-driven", "framework", "frontend", 
+        "functional programming", "GPU", "hashmap", "infosec", "internet", "IP address", 
+        "iteration", "JVM", "kubernetes", "library", "linker", "load testing", 
+        "logical operator", "minification", "neural network", "object model", 
+        "packet switching", "parameterization", "polymorphism", "proxy server", 
+        "queueing", "RAM", "random number generator", "recurrence", "relational database",
+        "runtime", "sandboxing", "scripting", "serverless", "stack trace", "state machine", 
+        "test-driven development", "TLS", "transactional", "unit testing", 
+        "versioning", "WebRTC", "workflow", "z-index", "agile methodology", 
+        "branching", "browser", "build pipeline", "byte stream", "cipher", 
+        "client-server", "codebase", "compression algorithm", "data lake", 
+        "distributed computing", "ETL", "fuzz testing", "git repository", "global state", 
+        "hash algorithm", "hosting environment", "identity management", "immutable", 
+        "key-value pair", "load balancer", "low-code", "message queue", "multi-threading", 
+        "natural language processing", "OAuth", "ORM", "performance profiling", 
+        "query optimization", "relational model", "server farm", "SOC", "stateful", 
+        "transaction log", "transpiler", "UI framework", "virtual DOM", "visualization", 
+        "VPN", "web analytics", "web framework", "zero-downtime", "zlib"
+      ];
+      
+      
       
       // Configuration
-      const maxSearches=10;
+      const maxSearches=30;
       let searchCount=0;
       
       // Helper functions
