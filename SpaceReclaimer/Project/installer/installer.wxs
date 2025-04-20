@@ -1,0 +1,130 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <?define ProductName = "SpaceReclaimer" ?>
+  <?define Manufacturer = "Your Company" ?>
+  <?define Version = "1.0.0" ?>
+  <?define UpgradeCode = "{12345678-1234-1234-1234-123456789012}" ?>
+
+  <Product Id="*" 
+           Name="$(var.ProductName)" 
+           Language="1033" 
+           Version="$(var.Version)" 
+           Manufacturer="$(var.Manufacturer)" 
+           UpgradeCode="$(var.UpgradeCode)">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Platform="x64"
+             Description="High-Performance Disk Space Recovery Tool"
+             Comments="Requires Windows 10/11 64-bit" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="SpaceReclaimer" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="ProgramMenuDir" />
+    </Feature>
+
+    <!-- UI Configuration -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <UIRef Id="WixUI_InstallDir" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
+
+    <!-- Windows 10/11 Check -->
+    <Condition Message="This application requires Windows 10 or Windows 11.">
+      <![CDATA[Installed OR (VersionNT >= 1000)]]>
+    </Condition>
+    
+    <!-- 64-bit Check -->
+    <Condition Message="This application requires a 64-bit operating system.">
+      <![CDATA[Installed OR VersionNT64]]>
+    </Condition>
+
+    <!-- Installation Directory Structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductName)" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="$(var.ProductName)" />
+      </Directory>
+    </Directory>
+
+    <!-- Registry entries for Windows Package Manager integration -->
+    <ComponentGroup Id="RegistryEntries">
+      <Component Id="RegistryEntries" Directory="INSTALLFOLDER" Guid="*">
+        <RegistryKey Root="HKLM" 
+                     Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(var.ProductName)">
+          <RegistryValue Type="string" Name="DisplayName" Value="$(var.ProductName)" />
+          <RegistryValue Type="string" Name="DisplayVersion" Value="$(var.Version)" />
+          <RegistryValue Type="string" Name="Publisher" Value="$(var.Manufacturer)" />
+          <RegistryValue Type="string" Name="UninstallString" 
+                         Value="[SystemFolder]msiexec.exe /x [ProductCode] /qn" />
+          <RegistryValue Type="integer" Name="NoModify" Value="1" />
+          <RegistryValue Type="integer" Name="NoRepair" Value="1" />
+        </RegistryKey>
+      </Component>
+    </ComponentGroup>
+
+    <!-- Program Files -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="*">
+        <File Id="SpaceReclaimerEXE" 
+              Source="bin\Release\net7.0-windows\win-x64\publish\SpaceReclaimer.exe" 
+              KeyPath="yes" />
+              
+        <!-- Add Windows Storage Sense integration -->
+        <RegistryKey Root="HKLM" 
+                     Key="SOFTWARE\Microsoft\Windows\CurrentVersion\StorageSense\SenseHandlers\SpaceReclaimer">
+          <RegistryValue Type="string" Name="Description" Value="SpaceReclaimer Disk Cleanup Engine" />
+          <RegistryValue Type="string" Name="Path" 
+                         Value="[INSTALLFOLDER]SpaceReclaimer.exe" />
+          <RegistryValue Type="string" Name="Arguments" Value="/auto /target:system,temp" />
+        </RegistryKey>
+        
+        <!-- Setup firewall exception -->
+        <util:FirewallException Id="FWException" 
+                               Name="SpaceReclaimer" 
+                               Program="[INSTALLFOLDER]SpaceReclaimer.exe" 
+                               Scope="localSubnet" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Start Menu Shortcuts -->
+    <ComponentGroup Id="ProgramMenuDir" Directory="ApplicationProgramsFolder">
+      <Component Id="ProgramMenuDir" Guid="*">
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" 
+                       Key="Software\$(var.Manufacturer)\$(var.ProductName)" 
+                       Name="installed" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
+        <Shortcut Id="ApplicationStartMenuShortcut" 
+                  Name="$(var.ProductName)" 
+                  Description="High-Performance Disk Space Recovery Tool"
+                  Target="[INSTALLFOLDER]SpaceReclaimer.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Custom Actions -->
+    <CustomAction Id="DefenderExclusion" 
+                 FileKey="SpaceReclaimerEXE" 
+                 ExeCommand="/auto /adddefenderexclusion" 
+                 Execute="deferred" 
+                 Impersonate="no" 
+                 Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="DefenderExclusion" After="InstallFinalize">NOT Installed</Custom>
+    </InstallExecuteSequence>
+
+  </Product>
+</Wix>

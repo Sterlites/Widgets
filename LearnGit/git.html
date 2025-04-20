@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Git Learning Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+        }
+        .commit-node {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .commit-node:hover {
+            stroke-width: 3;
+        }
+        .commit-label {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .branch-label {
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: none;
+        }
+        .head-pointer {
+            font-size: 14px;
+            font-weight: bold;
+            fill: #e53e3e;
+        }
+        .detached-head {
+            fill: #e53e3e;
+            font-style: italic;
+        }
+        .git-command {
+            transition: all 0.3s;
+        }
+        .git-command:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .concept-card {
+            transition: all 0.3s;
+        }
+        .concept-card:hover {
+            transform: scale(1.02);
+        }
+        .terminal {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #2d3748;
+            color: #f7fafc;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .terminal-prompt {
+            color: #68d391;
+        }
+        .terminal-output {
+            color: #f7fafc;
+        }
+        .terminal-error {
+            color: #fc8181;
+        }
+        .terminal-success {
+            color: #68d391;
+        }
+        .terminal-warning {
+            color: #f6e05e;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background: #333;
+            color: white;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 300px;
+        }
+        #visualization-container {
+            width: 100%;
+            height: 400px;
+            overflow: visible;
+            position: relative;
+        }
+        .step-navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .concept-list {
+            height: 300px;
+            overflow-y: auto;
+        }
+        @media print {
+            .no-print {
+                display: none;
+            }
+            body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            .page-break-avoid {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Interactive Git Learning Tool</h1>
+            <p class="text-xl text-gray-600">Master Git concepts with hands-on exploration</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Git Repository Visualization</h2>
+                    <div id="visualization-container" class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <!-- D3.js visualization will be rendered here -->
+                    </div>
+                    <div class="terminal mt-4">
+                        <div id="terminal-output">
+                            <span class="terminal-prompt">$ </span><span id="last-command">git init</span>
+                            <div class="terminal-output" id="command-output">Repository initialized with main branch.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Git Commands</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="commit">
+                            git commit
+                        </button>
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="branch">
+                            git branch
+                        </button>
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="checkout">
+                            git checkout
+                        </button>
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="checkout-commit">
+                            checkout commit
+                        </button>
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="merge">
+                            git merge
+                        </button>
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="reset">
+                            git reset
+                        </button>
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="rebase">
+                            git rebase
+                        </button>
+                        <button class="git-command bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg" data-command="cherry-pick">
+                            git cherry-pick
+                        </button>
+                        <button class="git-command bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-lg" data-command="recover">
+                            Recover from detached HEAD
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Interactive Tutorials</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-gray-100 p-4 rounded-lg cursor-pointer hover:bg-gray-200 transition" id="tutorial-basic">
+                            <h3 class="text-lg font-bold mb-2">Basic Git Workflow</h3>
+                            <p>Learn the fundamental Git commands and workflow</p>
+                        </div>
+                        <div class="bg-gray-100 p-4 rounded-lg cursor-pointer hover:bg-gray-200 transition" id="tutorial-detached">
+                            <h3 class="text-lg font-bold mb-2">Detached HEAD State</h3>
+                            <p>Master working with detached HEAD and understand its uses</p>
+                        </div>
+                        <div class="bg-gray-100 p-4 rounded-lg cursor-pointer hover:bg-gray-200 transition" id="tutorial-branching">
+                            <h3 class="text-lg font-bold mb-2">Branching Strategies</h3>
+                            <p>Learn effective branching and merging techniques</p>
+                        </div>
+                        <div class="bg-gray-100 p-4 rounded-lg cursor-pointer hover:bg-gray-200 transition" id="tutorial-advanced">
+                            <h3 class="text-lg font-bold mb-2">Advanced Git Operations</h3>
+                            <p>Explore rebase, cherry-pick, and other advanced operations</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-8 sticky top-4">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Git Concepts</h2>
+                    <div class="concept-list pr-2">
+                        <div class="concept-card mb-4 p-4 bg-blue-50 rounded-lg">
+                            <h3 class="text-lg font-bold text-blue-800 mb-2">What is Git?</h3>
+                            <p class="text-gray-700">Git is a distributed version control system that tracks changes in files. It allows multiple developers to work together on projects efficiently.</p>
+                        </div>
+
+                        <div class="concept-card mb-4 p-4 bg-green-50 rounded-lg">
+                            <h3 class="text-lg font-bold text-green-800 mb-2">Commits</h3>
+                            <p class="text-gray-700">Commits are snapshots of your repository at specific points in time. Each commit has a unique SHA-1 hash identifier and includes changes, author information, and a message.</p>
+                        </div>
+
+                        <div class="concept-card mb-4 p-4 bg-yellow-50 rounded-lg">
+                            <h3 class="text-lg font-bold text-yellow-800 mb-2">Branches</h3>
+                            <p class="text-gray-700">Branches are lightweight pointers to commits that allow parallel development. The default branch is usually called 'main' or 'master'.</p>
+                        </div>
+
+                        <div class="concept-card mb-4 p-4 bg-red-50 rounded-lg">
+                            <h3 class="text-lg font-bold text-red-800 mb-2">HEAD Pointer</h3>
+                            <p class="text-gray-700">HEAD is a special pointer that indicates the current working commit. It usually points to the latest commit of the current branch.</p>
+                        </div>
+
+                        <div class="concept-card mb-4 p-4 bg-red-100 rounded-lg">
+                            <h3 class="text-lg font-bold text-red-800 mb-2">Detached HEAD State</h3>
+                            <p class="text-gray-700">A detached HEAD occurs when HEAD points directly to a commit instead of a branch. This happens when you checkout a specific commit using its hash.</p>
+                            <p class="text-gray-700 mt-2">In detached HEAD state:</p>
+                            <ul class="list-disc ml-5 text-gray-700">
+                                <li>You can explore old versions of your project</li>
+                                <li>You can make experimental changes without affecting branches</li>
+                                <li>New commits you make aren't associated with any branch</li>
+                                <li>These commits may be lost when you checkout a branch unless you create a new branch to save them</li>
+                            </ul>
+                        </div>
+
+                        <div class="concept-card mb-4 p-4 bg-purple-50 rounded-lg">
+                            <h3 class="text-lg font-bold text-purple-800 mb-2">Merging</h3>
+                            <p class="text-gray-700">Merging combines changes from different branches. Git creates a new commit that incorporates changes from both branches.</p>
+                        </div>
+
+                        <div class="concept-card mb-4 p-4 bg-indigo-50 rounded-lg">
+                            <h3 class="text-lg font-bold text-indigo-800 mb-2">Rebasing</h3>
+                            <p class="text-gray-700">Rebasing moves or combines a sequence of commits to a new base commit, creating a linear history.</p>
+                        </div>
+
+                        <div class="concept-card mb-4 p-4 bg-pink-50 rounded-lg">
+                            <h3 class="text-lg font-bold text-pink-800 mb-2">Cherry Picking</h3>
+                            <p class="text-gray-700">Cherry picking allows you to apply specific commits from one branch to another, giving you fine-grained control over what changes to include.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Making the Most of Detached HEAD State</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-700 mb-3">Advantages of Detached HEAD</h3>
+                    <ul class="list-disc ml-5 text-gray-700 space-y-2">
+                        <li><strong>Exploring History:</strong> Safely inspect past code states without creating branches</li>
+                        <li><strong>Testing:</strong> Run quick tests on previous commits without disturbing your current work</li>
+                        <li><strong>Experimentation:</strong> Make temporary changes to explore ideas without committing to a branch</li>
+                        <li><strong>Code Archaeology:</strong> Investigate when and how specific issues were introduced</li>
+                        <li><strong>Build Verification:</strong> Check out specific commits to verify build artifacts</li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-xl font-bold text-gray-700 mb-3">Managing Detached HEAD State</h3>
+                    <ol class="list-decimal ml-5 text-gray-700 space-y-2">
+                        <li><strong>Identify:</strong> Git will warn you when entering detached HEAD state</li>
+                        <li><strong>Save Work:</strong> If you made valuable changes, create a new branch before leaving:
+                            <div class="terminal mt-2 mb-2">
+                                <span class="terminal-prompt">$ </span>git branch new-branch-name
+                            </div>
+                        </li>
+                        <li><strong>Return to Branch:</strong> When finished, checkout any branch to reattach HEAD:
+                            <div class="terminal mt-2 mb-2">
+                                <span class="terminal-prompt">$ </span>git checkout main
+                            </div>
+                        </li>
+                        <li><strong>Clean Up:</strong> If you made experimental commits you no longer need, they'll be garbage collected eventually</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="mt-8 p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
+                <h3 class="text-xl font-bold text-yellow-800 mb-2">Common Detached HEAD Scenarios</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <h4 class="font-bold">Scenario 1: Bug Investigation</h4>
+                        <p>Checkout an old commit to determine when a bug was introduced, then create a fix branch if needed.</p>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <h4 class="font-bold">Scenario 2: Git Bisect</h4>
+                        <p>Using git bisect automatically puts you in detached HEAD state while searching for a problematic commit.</p>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <h4 class="font-bold">Scenario 3: CI/CD Workflows</h4>
+                        <p>CI systems often checkout specific commits, entering detached HEAD state, to build and test code.</p>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <h4 class="font-bold">Scenario 4: Temporary Experiments</h4>
+                        <p>Make experimental changes to old code versions without polluting your branch history.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tutorial-container" class="bg-white rounded-lg shadow-lg p-6 mb-8 hidden">
+            <h2 id="tutorial-title" class="text-2xl font-bold text-gray-800 mb-4">Tutorial</h2>
+            <div id="tutorial-content" class="mb-4">
+                <!-- Tutorial content will be inserted here -->
+            </div>
+            <div class="step-navigation">
+                <button id="prev-step" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg" disabled>Previous Step</button>
+                <div id="step-indicator" class="text-gray-700">Step 1 of 5</div>
+                <button id="next-step" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg">Next Step</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // Main Git data structure
+        const gitData = {
+            commits: {
+                "initial": { id: "initial", message: "Initial commit", parents: [], timestamp: Date.now() - 1000000 }
+            },
+            branches: {
+                "main": "initial"
+            },
+            HEAD: {
+                type: "branch", // can be "branch" or "commit"
+                target: "main",
+                isDetached: false
+            },
+            lastCommitId: 0
+        };
+
+        // D3.js Visualization
+        function renderGitGraph() {
+            const container = d3.select("#visualization-container");
+            const width = container.node().getBoundingClientRect().width;
+            const height = 400;
+            
+            // Clear previous visualization
+            container.selectAll("svg").remove();
+            
+            const svg = container.append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .append("g")
+                .attr("transform", "translate(40, 40)");
+            
+            // Build the graph data structure
+            const nodes = [];
+            const links = [];
+            const commitIds = Object.keys(gitData.commits);
+            
+            // Create a mapping of commit id to index for positioning
+            const commitIndexMap = {};
+            const processedCommits = new Set();
+            let maxDepth = 0;
+            
+            // Process commits breadth-first to position them
+            function processCommitsBFS() {
+                const queue = [];
+                
+                // Start with all branch tips
+                Object.values(gitData.branches).forEach(commitId => {
+                    queue.push({ commitId, depth: 0 });
+                });
+                
+                while (queue.length > 0) {
+                    const { commitId, depth } = queue.shift();
+                    
+                    if (processedCommits.has(commitId)) continue;
+                    processedCommits.add(commitId);
+                    
+                    commitIndexMap[commitId] = depth;
+                    maxDepth = Math.max(maxDepth, depth);
+                    
+                    // Add parents to queue
+                    const commit = gitData.commits[commitId];
+                    commit.parents.forEach(parentId => {
+                        queue.push({ commitId: parentId, depth: depth + 1 });
+                    });
+                }
+            }
+            
+            processCommitsBFS();
+            
+            // Create nodes for each commit
+            commitIds.forEach(commitId => {
+                const commit = gitData.commits[commitId];
+                nodes.push({
+                    id: commitId,
+                    message: commit.message,
+                    depth: commitIndexMap[commitId] || 0,
+                    timestamp: commit.timestamp
+                });
+                
+                // Create links from this commit to its parents
+                commit.parents.forEach(parentId => {
+                    links.push({
+                        source: commitId,
+                        target: parentId
+                    });
+                });
+            });
+            
+            // Count commits per depth level for vertical positioning
+            const depthCounts = {};
+            const depthPositions = {};
+            
+            nodes.forEach(node => {
+                depthCounts[node.depth] = (depthCounts[node.depth] || 0) + 1;
+            });
+            
+            // Sort nodes by timestamp within each depth
+            nodes.sort((a, b) => {
+                if (a.depth === b.depth) {
+                    return b.timestamp - a.timestamp;
+                }
+                return 0;
+            });
+            
+            // Assign vertical positions
+            const depthCounters = {};
+            nodes.forEach(node => {
+                depthCounters[node.depth] = depthCounters[node.depth] || 0;
+                node.y = depthCounters[node.depth] * 50 + 50;
+                depthCounters[node.depth]++;
+            });
+            
+            // Assign horizontal positions
+            nodes.forEach(node => {
+                node.x = (maxDepth - node.depth) * 100 + 50;
+            });
+            
+            // Draw links
+            svg.selectAll(".link")
+                .data(links)
+                .enter()
+                .append("path")
+                .attr("class", "link")
+                .attr("d", d => {
+                    const source = nodes.find(node => node.id === d.source);
+                    const target = nodes.find(node => node.id === d.target);
+                    return `M${source.x},${source.y} C${source.x - 40},${source.y} ${target.x + 40},${target.y} ${target.x},${target.y}`;
+                })
+                .attr("fill", "none")
+                .attr("stroke", "#CBD5E0")
+                .attr("stroke-width", 2);
+            
+            // Draw commit nodes
+            const nodeElements = svg.selectAll(".commit-node")
+                .data(nodes)
+                .enter()
+                .append("g")
+                .attr("transform", d => `translate(${d.x}, ${d.y})`)
+                .attr("class", "commit-group");
+            
+            nodeElements.append("circle")
+                .attr("class", "commit-node")
+                .attr("r", 10)
+                .attr("fill", "#4299E1")
+                .attr("stroke", "#2B6CB0")
+                .attr("stroke-width", 2)
+                .attr("data-id", d => d.id)
+                .on("click", function(event, d) {
+                    handleCommitClick(d.id);
+                })
+                .on("mouseenter", function(event, d) {
+                    showTooltip(`Commit: ${d.id.substring(0, 7)}<br>Message: ${d.message}`, event.pageX, event.pageY);
+                })
+                .on("mouseleave", function() {
+                    hideTooltip();
+                });
+            
+            nodeElements.append("text")
+                .attr("class", "commit-label")
+                .attr("x", 15)
+                .attr("y", 5)
+                .text(d => `${d.id.substring(0, 7)}: ${d.message.substring(0, 20)}${d.message.length > 20 ? '...' : ''}`);
+            
+            // Draw branch labels
+            const branchData = [];
+            let branchOffset = 0;
+            
+            Object.entries(gitData.branches).forEach(([branchName, commitId], index) => {
+                const commitNode = nodes.find(node => node.id === commitId);
+                if (commitNode) {
+                    branchData.push({
+                        name: branchName,
+                        x: commitNode.x,
+                        y: commitNode.y - 20 - (branchOffset * 20),
+                        commitId: commitId
+                    });
+                    branchOffset = (branchOffset + 1) % 2; // Alternate offsets to avoid overlap
+                }
+            });
+            
+            svg.selectAll(".branch-label")
+                .data(branchData)
+                .enter()
+                .append("text")
+                .attr("class", "branch-label")
+                .attr("x", d => d.x)
+                .attr("y", d => d.y)
+                .attr("text-anchor", "middle")
+                .attr("fill", d => d.name === "main" ? "#38A169" : "#D69E2E")
+                .text(d => d.name);
+            
+            // Draw HEAD pointer
+            const headTarget = gitData.HEAD.type === "branch" 
+                ? gitData.branches[gitData.HEAD.target] 
+                : gitData.HEAD.target;
+            
+            const headCommitNode = nodes.find(node => node.id === headTarget);
+            
+            if (headCommitNode) {
+                const headPointer = svg.append("text")
+                    .attr("class", gitData.HEAD.isDetached ? "head-pointer detached-head" : "head-pointer")
+                    .attr("x", headCommitNode.x)
+                    .attr("y", headCommitNode.y + 30)
+                    .attr("text-anchor", "middle")
+                    .text(gitData.HEAD.isDetached ? "HEAD (detached)" : "HEAD");
+            }
+        }
+
+        // Function to generate a random commit hash
+        function generateCommitId() {
+            gitData.lastCommitId++;
+            return `commit${gitData.lastCommitId}`;
+        }
+
+        // Git operations
+        function createCommit(message) {
+            const headTarget = gitData.HEAD.type === "branch" 
+                ? gitData.branches[gitData.HEAD.target] 
+                : gitData.HEAD.target;
+            
+            const newCommitId = generateCommitId();
+            gitData.commits[newCommitId] = {
+                id: newCommitId,
+                message: message,
+                parents: [headTarget],
+                timestamp: Date.now()
+            };
+            
+            if (gitData.HEAD.type === "branch") {
+                gitData.branches[gitData.HEAD.target] = newCommitId;
+                updateTerminal(`git commit -m "${message}"`, `Created commit ${newCommitId.substring(0, 7)}`);
+            } else {
+                // In detached HEAD state
+                gitData.HEAD.target = newCommitId;
+                updateTerminal(`git commit -m "${message}"`, `Created commit ${newCommitId.substring(0, 7)} in detached HEAD state. These changes are not attached to any branch.`);
+            }
+            
+            renderGitGraph();
+        }
+
+        function createBranch() {
+            const branchName = prompt("Enter new branch name:");
+            if (!branchName) return;
+            
+            const headTarget = gitData.HEAD.type === "branch" 
+                ? gitData.branches[gitData.HEAD.target] 
+                : gitData.HEAD.target;
+            
+            gitData.branches[branchName] = headTarget;
+            updateTerminal(`git branch ${branchName}`, `Created branch ${branchName} at commit ${headTarget.substring(0, 7)}`);
+            
+            renderGitGraph();
+        }
+
+        function checkoutBranch() {
+            const branches = Object.keys(gitData.branches);
+            if (branches.length <= 1) {
+                updateTerminal("git checkout", "Error: No other branches to checkout", true);
+                return;
+            }
+            
+            const branchOptions = branches.map((branch, i) => `${i+1}. ${branch}`).join('\n');
+            const branchIndex = prompt(`Select a branch to checkout:\n${branchOptions}`);
+            
+            if (!branchIndex || isNaN(branchIndex) || branchIndex < 1 || branchIndex > branches.length) {
+                return;
+            }
+            
+            const branchName = branches[branchIndex - 1];
+            
+            gitData.HEAD = {
+                type: "branch",
+                target: branchName,
+                isDetached: false
+            };
+            
+            updateTerminal(`git checkout ${branchName}`, `Switched to branch '${branchName}'`);
+            renderGitGraph();
+        }
+
+        function checkoutCommit() {
+            const commits = Object.keys(gitData.commits);
+            if (commits.length <= 1) {
+                updateTerminal("git checkout", "Error: No commits to checkout", true);
+                return;
+            }
+            
+            const commitOptions = commits.map((commit, i) => {
+                const message = gitData.commits[commit].message;
+                return `${i+1}. ${commit.substring(0, 7)} - ${message}`;
+            }).join('\n');
+            
+            const commitIndex = prompt(`Select a commit to checkout (this will put you in detached HEAD state):\n${commitOptions}`);
+            
+            if (!commitIndex || isNaN(commitIndex) || commitIndex < 1 || commitIndex > commits.length) {
+                return;
+            }
+            
+            const commitId = commits[commitIndex - 1];
+            
+            gitData.HEAD = {
+                type: "commit",
+                target: commitId,
+                isDetached: true
+            };
+            
+            updateTerminal(`git checkout ${commitId.substring(0, 7)}`, `Note: checking out '${commitId.substring(0, 7)}'.\n\nYou are in 'detached HEAD' state. You can look around, make experimental changes and commit them, and you can discard any commits you make in this state without impacting any branches.`);
+            renderGitGraph();
+        }
+
+        function mergeBranch() {
+            if (gitData.HEAD.isDetached) {
+                updateTerminal("git merge", "Error: Cannot merge when HEAD is detached. Checkout a branch first.", true);
+                return;
+            }
+            
+            const currentBranch = gitData.HEAD.target;
+            const branches = Object.keys(gitData.branches).filter(branch => branch !== currentBranch);
+            
+            if (branches.length === 0) {
+                updateTerminal("git merge", "Error: No other branches to merge from", true);
+                return;
+            }
+            
+            const branchOptions = branches.map((branch, i) => `${i+1}. ${branch}`).join('\n');
+            const branchIndex = prompt(`Select a branch to merge into ${currentBranch}:\n${branchOptions}`);
+            
+            if (!branchIndex || isNaN(branchIndex) || branchIndex < 1 || branchIndex > branches.length) {
+                return;
+            }
+            
+            const sourceBranch = branches[branchIndex - 1];
+            const targetCommit = gitData.branches[currentBranch];
+            const sourceCommit = gitData.branches[sourceBranch];
+            
+            if (targetCommit === sourceCommit) {
+                updateTerminal(`git merge ${sourceBranch}`, `Already up to date. ${sourceBranch} is at the same commit as ${currentBranch}.`);
+                return;
+            }
+            
+            // Create a new merge commit
+            const newCommitId = generateCommitId();
+            gitData.commits[newCommitId] = {
+                id: newCommitId,
+                message: `Merge branch '${sourceBranch}' into ${currentBranch}`,
+                parents: [targetCommit, sourceCommit],
+                timestamp: Date.now()
+            };
+            
+            gitData.branches[currentBranch] = newCommitId;
+            updateTerminal(`git merge ${sourceBranch}`, `Merged branch '${sourceBranch}' into ${currentBranch}`);
+            
+            renderGitGraph();
+        }
+
+        function resetBranch() {
+            if (gitData.HEAD.isDetached) {
+                updateTerminal("git reset", "Error: Cannot reset when HEAD is detached. Checkout a branch first.", true);
+                return;
+            }
+            
+            const commits = Object.keys(gitData.commits);
+            if (commits.length <= 1) {
+                updateTerminal("git reset", "Error: No commits to reset to", true);
+                return;
+            }
+            
+            const commitOptions = commits.map((commit, i) => {
+                const message = gitData.commits[commit].message;
+                return `${i+1}. ${commit.substring(0, 7)} - ${message}`;
+            }).join('\n');
+            
+            const commitIndex = prompt(`Select a commit to reset the current branch to:\n${commitOptions}`);
+            
+            if (!commitIndex || isNaN(commitIndex) || commitIndex < 1 || commitIndex > commits.length) {
+                return;
+            }
+            
+            const commitId = commits[commitIndex - 1];
+            const currentBranch = gitData.HEAD.target;
+            
+            gitData.branches[currentBranch] = commitId;
+            updateTerminal(`git reset --hard ${commitId.substring(0, 7)}`, `HEAD is now at ${commitId.substring(0, 7)} ${gitData.commits[commitId].message}`);
+            
+            renderGitGraph();
+        }
+
+        function rebaseBranch() {
+            if (gitData.HEAD.isDetached) {
+                updateTerminal("git rebase", "Error: Cannot rebase when HEAD is detached. Checkout a branch first.", true);
+                return;
+            }
+            
+            const currentBranch = gitData.HEAD.target;
+            const branches = Object.keys(gitData.branches).filter(branch => branch !== currentBranch);
+            
+            if (branches.length === 0) {
+                updateTerminal("git rebase", "Error: No other branches to rebase onto", true);
+                return;
+            }
+            
+            const branchOptions = branches.map((branch, i) => `${i+1}. ${branch}`).join('\n');
+            const branchIndex = prompt(`Select a branch to rebase ${currentBranch} onto:\n${branchOptions}`);
+            
+            if (!branchIndex || isNaN(branchIndex) || branchIndex < 1 || branchIndex > branches.length) {
+                return;
+            }
+            
+            const targetBranch = branches[branchIndex - 1];
+            const currentCommit = gitData.branches[currentBranch];
+            const targetCommit = gitData.branches[targetBranch];
+            
+            if (currentCommit === targetCommit) {
+                updateTerminal(`git rebase ${targetBranch}`, `Already up to date. ${currentBranch} is at the same commit as ${targetBranch}.`);
+                return;
+            }
+            
+            // Create a new rebased commit
+            const newCommitId = generateCommitId();
+            gitData.commits[newCommitId] = {
+                id: newCommitId,
+                message: `Rebased ${currentBranch} onto ${targetBranch}`,
+                parents: [targetCommit],
+                timestamp: Date.now()
+            };
+            
+            gitData.branches[currentBranch] = newCommitId;
+            updateTerminal(`git rebase ${targetBranch}`, `Successfully rebased ${currentBranch} onto ${targetBranch}`);
+            
+            renderGitGraph();
+        }
+
+        function cherryPick() {
+            const commits = Object.keys(gitData.commits);
+            if (commits.length <= 1) {
+                updateTerminal("git cherry-pick", "Error: No commits to cherry-pick", true);
+                return;
+            }
+            
+            const commitOptions = commits.map((commit, i) => {
+                const message = gitData.commits[commit].message;
+                return `${i+1}. ${commit.substring(0, 7)} - ${message}`;
+            }).join('\n');
+            
+            const commitIndex = prompt(`Select a commit to cherry-pick:\n${commitOptions}`);
+            
+            if (!commitIndex || isNaN(commitIndex) || commitIndex < 1 || commitIndex > commits.length) {
+                return;
+            }
+            
+            const commitId = commits[commitIndex - 1];
+            
+            if (gitData.HEAD.isDetached) {
+                // In detached HEAD state
+                const headCommit = gitData.HEAD.target;
+                
+                // Create a new cherry-picked commit
+                const newCommitId = generateCommitId();
+                gitData.commits[newCommitId] = {
+                    id: newCommitId,
+                    message: `Cherry-picked: ${gitData.commits[commitId].message}`,
+                    parents: [headCommit],
+                    timestamp: Date.now()
+                };
+                
+                gitData.HEAD.target = newCommitId;
+                updateTerminal(`git cherry-pick ${commitId.substring(0, 7)}`, `Cherry-picked commit ${commitId.substring(0, 7)} in detached HEAD state.`);
+            } else {
+                // On a branch
+                const currentBranch = gitData.HEAD.target;
+                const branchCommit = gitData.branches[currentBranch];
+                
+                // Create a new cherry-picked commit
+                const newCommitId = generateCommitId();
+                gitData.commits[newCommitId] = {
+                    id: newCommitId,
+                    message: `Cherry-picked: ${gitData.commits[commitId].message}`,
+                    parents: [branchCommit],
+                    timestamp: Date.now()
+                };
+                
+                gitData.branches[currentBranch] = newCommitId;
+                updateTerminal(`git cherry-pick ${commitId.substring(0, 7)}`, `Cherry-picked commit ${commitId.substring(0, 7)} onto ${currentBranch}`);
+            }
+            
+            renderGitGraph();
+        }
+
+        function recoverFromDetachedHead() {
+            if (!gitData.HEAD.isDetached) {
+                updateTerminal("git branch new-branch && git checkout new-branch", "Error: HEAD is not in detached state", true);
+                return;
+            }
+            
+            const branchName = prompt("Enter new branch name to save your work:");
+            if (!branchName) return;
+            
+            const commitId = gitData.HEAD.target;
+            
+            gitData.branches[branchName] = commitId;
+            gitData.HEAD = {
+                type: "branch",
+                target: branchName,
+                isDetached: false
+            };
+            
+            updateTerminal(`git branch ${branchName} && git checkout ${branchName}`, `Created and switched to new branch '${branchName}' at commit ${commitId.substring(0, 7)}`);
+            renderGitGraph();
+        }
+
+        // Event handler for commit clicks
+        function handleCommitClick(commitId) {
+            const commit = gitData.commits[commitId];
+            alert(`Commit: ${commitId.substring(0, 7)}\nMessage: ${commit.message}\nParents: ${commit.parents.map(p => p.substring(0, 7)).join(', ')}`);
+        }
+
+        // Update terminal output
+        function updateTerminal(command, output, isError = false) {
+            document.getElementById("last-command").textContent = command;
+            const commandOutput = document.getElementById("command-output");
+            commandOutput.textContent = output;
+            commandOutput.className = isError ? "terminal-error" : "terminal-output";
+        }
+
+        // Tooltip functions
+        function showTooltip(text, x, y) {
+            const tooltip = d3.select("#tooltip")
+                .html(text)
+                .style("left", (x + 10) + "px")
+                .style("top", (y - 20) + "px")
+                .style("opacity", 1);
+        }
+
+        function hideTooltip() {
+            d3.select("#tooltip").style("opacity", 0);
+        }
+
+        // Tutorial system
+        const tutorials = {
+            "basic": {
+                title: "Basic Git Workflow",
+                steps: [
+                    {
+                        title: "Making Your First Commit",
+                        content: "Let's start by making your first commit. This will save the current state of your project. Click the 'git commit' button to create a commit.",
+                        action: () => document.querySelector("[data-command='commit']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Creating a Branch",
+                        content: "Now let's create a branch to work on a new feature. Click the 'git branch' button to create a new branch.",
+                        action: () => document.querySelector("[data-command='branch']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Switching Branches",
+                        content: "Let's switch to the new branch you created. Click the 'git checkout' button to switch branches.",
+                        action: () => document.querySelector("[data-command='checkout']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Committing on Your Branch",
+                        content: "Now make a commit on your new branch. Click the 'git commit' button again to create another commit.",
+                        action: () => document.querySelector("[data-command='commit']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Merging Changes",
+                        content: "Finally, let's merge your changes back to the main branch. First, check out main and then use the merge button.",
+                        action: () => {
+                            document.querySelector("[data-command='checkout']").classList.add("animate-pulse");
+                            setTimeout(() => {
+                                document.querySelector("[data-command='checkout']").classList.remove("animate-pulse");
+                                document.querySelector("[data-command='merge']").classList.add("animate-pulse");
+                            }, 2000);
+                        }
+                    }
+                ]
+            },
+            "detached": {
+                title: "Working with Detached HEAD State",
+                steps: [
+                    {
+                        title: "What is Detached HEAD?",
+                        content: "A detached HEAD state occurs when your HEAD pointer references a specific commit instead of a branch. This happens when you checkout a commit directly using its hash.",
+                        action: null
+                    },
+                    {
+                        title: "Entering Detached HEAD State",
+                        content: "Let's enter detached HEAD state by checking out a specific commit. Click the 'checkout commit' button and select any commit.",
+                        action: () => document.querySelector("[data-command='checkout-commit']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Working in Detached HEAD",
+                        content: "Notice that HEAD now points directly to a commit, not a branch. You can make changes and commits in this state, but they won't belong to any branch. Try making a commit now.",
+                        action: () => document.querySelector("[data-command='commit']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Potential Data Loss",
+                        content: "Any commits you make in detached HEAD state can be lost when you checkout something else, unless you create a branch to save them. These commits can eventually be garbage collected.",
+                        action: null
+                    },
+                    {
+                        title: "Recovering from Detached HEAD",
+                        content: "To save your work in detached HEAD state, create a new branch. Click the 'Recover from detached HEAD' button to create a branch from your current state.",
+                        action: () => document.querySelector("[data-command='recover']").classList.add("animate-pulse")
+                    }
+                ]
+            },
+            "branching": {
+                title: "Branching Strategies",
+                steps: [
+                    {
+                        title: "Git Flow Overview",
+                        content: "Git Flow is a popular branching strategy with main branches (main/master, develop) and supporting branches (feature, release, hotfix). Let's create a develop branch.",
+                        action: () => document.querySelector("[data-command='branch']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Feature Branches",
+                        content: "Feature branches are used to develop new features. They branch off from develop and merge back into develop. Create a feature branch and switch to it.",
+                        action: () => {
+                            document.querySelector("[data-command='branch']").classList.add("animate-pulse");
+                            setTimeout(() => {
+                                document.querySelector("[data-command='branch']").classList.remove("animate-pulse");
+                                document.querySelector("[data-command='checkout']").classList.add("animate-pulse");
+                            }, 2000);
+                        }
+                    },
+                    {
+                        title: "Working on Features",
+                        content: "Make changes and commits on your feature branch. Create a couple of commits to simulate development work.",
+                        action: () => document.querySelector("[data-command='commit']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Merging vs Rebasing",
+                        content: "You can integrate your feature using merge or rebase. Merging preserves history but creates merge commits. Rebasing creates linear history but rewrites commit history.",
+                        action: null
+                    },
+                    {
+                        title: "Completing the Feature",
+                        content: "Let's complete the feature by merging it back to develop. First checkout develop, then merge your feature branch.",
+                        action: () => {
+                            document.querySelector("[data-command='checkout']").classList.add("animate-pulse");
+                            setTimeout(() => {
+                                document.querySelector("[data-command='checkout']").classList.remove("animate-pulse");
+                                document.querySelector("[data-command='merge']").classList.add("animate-pulse");
+                            }, 2000);
+                        }
+                    }
+                ]
+            },
+            "advanced": {
+                title: "Advanced Git Operations",
+                steps: [
+                    {
+                        title: "Rebasing Workflow",
+                        content: "Rebasing moves or combines a sequence of commits to a new base commit. It's useful for keeping a clean, linear project history. Let's create branches to demonstrate rebasing.",
+                        action: () => document.querySelector("[data-command='branch']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Performing a Rebase",
+                        content: "After creating and switching to a feature branch and making commits, you can rebase to incorporate changes from another branch. Try using the rebase command.",
+                        action: () => document.querySelector("[data-command='rebase']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Cherry Picking",
+                        content: "Cherry picking allows you to apply specific commits from one branch to another. It's useful when you want to selectively apply changes. Try cherry-picking a commit.",
+                        action: () => document.querySelector("[data-command='cherry-pick']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Reset Operations",
+                        content: "Git reset moves the HEAD and branch pointer to a specified commit. It's useful for undoing changes or moving a branch to a different point in history.",
+                        action: () => document.querySelector("[data-command='reset']").classList.add("animate-pulse")
+                    },
+                    {
+                        title: "Detached HEAD for Exploration",
+                        content: "You can use detached HEAD state to explore old versions of your code or make experimental changes without affecting any branches. Try checking out an old commit.",
+                        action: () => document.querySelector("[data-command='checkout-commit']").classList.add("animate-pulse")
+                    }
+                ]
+            }
+        };
+
+        let currentTutorial = null;
+        let currentStep = 0;
+
+        function startTutorial(tutorialId) {
+            currentTutorial = tutorials[tutorialId];
+            currentStep = 0;
+            
+            document.getElementById("tutorial-container").classList.remove("hidden");
+            document.getElementById("tutorial-title").textContent = currentTutorial.title;
+            
+            updateTutorialStep();
+        }
+
+        function updateTutorialStep() {
+            const step = currentTutorial.steps[currentStep];
+            const content = `
+                <h3 class="text-xl font-bold mb-2">${step.title}</h3>
+                <p class="mb-4">${step.content}</p>
+            `;
+            
+            document.getElementById("tutorial-content").innerHTML = content;
+            document.getElementById("step-indicator").textContent = `Step ${currentStep + 1} of ${currentTutorial.steps.length}`;
+            
+            document.getElementById("prev-step").disabled = currentStep === 0;
+            document.getElementById("next-step").disabled = currentStep === currentTutorial.steps.length - 1;
+            
+            // Remove any existing animations
+            document.querySelectorAll(".animate-pulse").forEach(el => {
+                el.classList.remove("animate-pulse");
+            });
+            
+            // Apply new animation if specified
+            if (step.action) {
+                step.action();
+            }
+        }
+
+        function nextStep() {
+            if (currentStep < currentTutorial.steps.length - 1) {
+                currentStep++;
+                updateTutorialStep();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 0) {
+                currentStep--;
+                updateTutorialStep();
+            }
+        }
+
+        // Set up event listeners
+        document.addEventListener("DOMContentLoaded", function() {
+            renderGitGraph();
+            
+            // Command buttons
+            document.querySelectorAll(".git-command").forEach(button => {
+                button.addEventListener("click", function() {
+                    const command = this.getAttribute("data-command");
+                    
+                    if (command === "commit") {
+                        const message = prompt("Enter commit message:") || "Update code";
+                        createCommit(message);
+                    } else if (command === "branch") {
+                        createBranch();
+                    } else if (command === "checkout") {
+                        checkoutBranch();
+                    } else if (command === "checkout-commit") {
+                        checkoutCommit();
+                    } else if (command === "merge") {
+                        mergeBranch();
+                    } else if (command === "reset") {
+                        resetBranch();
+                    } else if (command === "rebase") {
+                        rebaseBranch();
+                    } else if (command === "cherry-pick") {
+                        cherryPick();
+                    } else if (command === "recover") {
+                        recoverFromDetachedHead();
+                    }
+                });
+            });
+            
+            // Tutorial buttons
+            document.getElementById("tutorial-basic").addEventListener("click", function() {
+                startTutorial("basic");
+            });
+            
+            document.getElementById("tutorial-detached").addEventListener("click", function() {
+                startTutorial("detached");
+            });
+            
+            document.getElementById("tutorial-branching").addEventListener("click", function() {
+                startTutorial("branching");
+            });
+            
+            document.getElementById("tutorial-advanced").addEventListener("click", function() {
+                startTutorial("advanced");
+            });
+            
+            // Tutorial navigation
+            document.getElementById("next-step").addEventListener("click", nextStep);
+            document.getElementById("prev-step").addEventListener("click", prevStep);
+        });
+    </script>
+</body>
+</html>

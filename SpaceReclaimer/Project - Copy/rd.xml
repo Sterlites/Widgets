@@ -1,0 +1,13 @@
+﻿<Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
+  <Application>
+    <Assembly Name="SpaceReclaimer">
+      <Type Name="SpaceReclaimer.Core.TurboScanner" Dynamic="Required All" />
+      <Type Name="SpaceReclaimer.Core.MftReader" Dynamic="Required All" />
+      <Type Name="SpaceReclaimer.Core.TurboModeScanner" Dynamic="Required All" />
+      <Type Name="SpaceReclaimer.UI.DirectTreemapRenderer" Dynamic="Required All" />
+    </Assembly>
+    <Assembly Name="System.Runtime" Dynamic="Required All" />
+    <Assembly Name="System.Collections" Dynamic="Required All" />
+    <Assembly Name="System.Linq" Dynamic="Required All" />
+  </Application>
+</Directives>
