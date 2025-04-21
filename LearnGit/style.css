@@ -1,0 +1,295 @@
+body {
+    font-family: sans-serif;
+    line-height: 1.6;
+    margin: 20px;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+h1, h2, h3 {
+    color: #444;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 250px 1fr; /* Controls | Visualizer */
+    grid-template-rows: auto auto; /* Visualizer | Output/Explanation */
+    gap: 20px;
+    grid-template-areas:
+        "controls visualizer"
+        "controls output";
+}
+
+.controls-container {
+    grid-area: controls;
+    background-color: #e0e0e0;
+    padding: 15px;
+    border-radius: 5px;
+    height: fit-content; /* Make it fit content */
+}
+
+.command-group {
+    margin-bottom: 20px;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 15px;
+}
+.command-group:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.command-group h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1em;
+    color: #555;
+}
+
+.controls-container button {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease;
+}
+
+.controls-container button:hover {
+    background-color: #0056b3;
+}
+.controls-container button:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+}
+
+
+.visualizer-container {
+    grid-area: visualizer;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr); /* 5 columns */
+    gap: 15px;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    min-height: 350px; /* Ensure minimum height */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.git-area {
+    border: 2px dashed #ccc;
+    padding: 15px;
+    min-height: 200px;
+    position: relative; /* For absolute positioning inside */
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+}
+
+.git-area h3 {
+    margin-top: 0;
+    text-align: center;
+    font-size: 1em;
+    color: #666;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+
+.git-area .files {
+    display: flex;
+    flex-wrap: wrap; /* Allow files to wrap */
+    gap: 8px;
+    align-content: flex-start; /* Align items to the top */
+    flex-grow: 1; /* Allow file area to grow */
+}
+
+.repo {
+    border-style: solid;
+    border-color: #888;
+    background-color: #f0f0f0;
+}
+
+.repo-content {
+    position: relative;
+    height: 200px; /* Fixed height for commit drawing */
+    width: 100%;
+    overflow: visible; /* Allow lines/pointers to go outside */
+}
+
+.url {
+    font-size: 0.8em;
+    color: #555;
+    margin-top: auto; /* Push to bottom */
+    text-align: center;
+    word-break: break-all;
+}
+
+.file {
+    border: 1px solid #aaa;
+    padding: 5px 8px;
+    border-radius: 3px;
+    background-color: #e9e9e9;
+    font-size: 0.9em;
+    cursor: default;
+    transition: all 0.5s ease-in-out;
+    white-space: nowrap;
+    height: fit-content;
+    box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.file.modified {
+    background-color: #fffacd; /* Light yellow */
+    border-color: #f0e68c;
+}
+.file.staged {
+    background-color: #add8e6; /* Light blue */
+    border-color: #87ceeb;
+}
+.file.ignored {
+    background-color: #d3d3d3; /* Light grey */
+    border-color: #a9a9a9;
+    color: #777;
+    text-decoration: line-through;
+}
+.file.conflicted {
+    background-color: #ffcccb; /* Light red */
+    border-color: #ffaaaa;
+    animation: blink 1s infinite alternate;
+}
+@keyframes blink {
+    from { opacity: 1; }
+    to { opacity: 0.6; }
+}
+
+
+/* Commit visualization */
+.commit-node {
+    position: absolute;
+    width: 25px;
+    height: 25px;
+    background-color: #6c757d;
+    border-radius: 50%;
+    color: white;
+    font-size: 0.7em;
+    line-height: 25px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: background-color 0.3s, transform 0.3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.commit-node:hover {
+    transform: scale(1.1);
+}
+.commit-node.main-branch { background-color: #dc3545; } /* Red */
+.commit-node.feature-branch { background-color: #17a2b8; } /* Cyan */
+.commit-node.merge-commit { background-color: #ffc107; width: 30px; height: 30px; line-height: 30px;} /* Yellow */
+
+.commit-link {
+    position: absolute;
+    height: 2px;
+    background-color: #adb5bd;
+    transform-origin: 0 50%;
+    z-index: 1;
+}
+.commit-link.main-branch { background-color: #dc3545; }
+.commit-link.feature-branch { background-color: #17a2b8; }
+
+
+.branch-label {
+    position: absolute;
+    font-size: 0.8em;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid;
+    white-space: nowrap;
+    z-index: 3;
+}
+.branch-label.main-branch { border-color: #dc3545; color: #dc3545; }
+.branch-label.feature-branch { border-color: #17a2b8; color: #17a2b8; }
+.branch-label.remote-branch { opacity: 0.7; font-style: italic; }
+
+.head-pointer {
+    position: absolute;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #28a745; /* Green */
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid #28a745;
+    z-index: 4;
+    transition: all 0.5s ease-in-out;
+    white-space: nowrap;
+}
+.head-pointer.detached {
+    color: #fd7e14; /* Orange */
+    border-color: #fd7e14;
+}
+
+
+.output-explanation-container {
+    grid-area: output;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 10px;
+}
+
+.terminal-container, .explanation-container {
+    background-color: #fff;
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#terminal-output {
+    background-color: #333;
+    color: #0f0;
+    padding: 10px;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: 100px;
+    max-height: 250px;
+    overflow-y: scroll;
+}
+#terminal-output span { display: block; } /* New lines for each command */
+#terminal-output .command { color: #fff; }
+#terminal-output .output { color: #0f0; margin-left: 10px; }
+#terminal-output .error { color: #f00; margin-left: 10px; }
+#terminal-output .warning { color: #ff0; margin-left: 10px; }
+
+
+#explanation {
+    font-size: 0.95em;
+    color: #555;
+}
+
+/* Simple File Movement Animation */
+.file-enter {
+    opacity: 0;
+    transform: scale(0.5);
+}
+.file-entering {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Stash Area Specific */
+#stash-area {
+    border-color: #ffc107; /* Yellow border for stash */
+    background-color: #fffbea;
+}
