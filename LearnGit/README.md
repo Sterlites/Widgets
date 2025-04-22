@@ -1,17 +1,17 @@
-# Interactive Git Visualizer
+# Sterlites Interactive Git Visualizer
 
 ![Git Visualizer Banner](https://via.placeholder.com/1200x300/0d1117/ffffff?text=Interactive+Git+Visualizer)
 
 ## 🚀 Overview
 
-The Interactive Git Visualizer is a powerful educational tool designed to help developers understand Git concepts through visual representation and hands-on interaction. This web-based widget provides a clear, intuitive visualization of Git's core areas (Working Directory, Staging Area, Local Repository, and Remote Repository) and demonstrates how Git commands affect these areas in real-time.
+The Interactive Git Visualizer is a powerful visual tool that transforms how everyone understands Git concepts through intuitive visualization and hands-on interaction. Built from experience at Sterlites.com, this web-based widget provides a clear visualization of Git's core areas (Working Directory, Staging Area, Local Repository, and Remote Repository) and demonstrates how Git commands affect these areas in real-time.
 
 Perfect for:
 
-- 🎓 New developers learning Git for the first time
-- 👨‍🏫 Educators teaching version control concepts
-- 👩‍💻 Experienced developers explaining complex Git workflows to teammates
-- 🧠 Visual learners who understand concepts better through interactive demonstrations
+- 🎓 New grads learning Git for the first time
+- 👨‍🏫 Senior engineers teaching version control concepts
+- 👩‍💻 "Vibe coders" looking to understand Git fundamentals
+- 🧠 Teams seeking faster onboarding and fewer errors
 
 ## ✨ Features
 
@@ -55,8 +55,8 @@ Perfect for:
 ### Option 2: Clone the Repository
 
 ```bash
-git clone https://github.com/Sterlites/interactive-git-visualizer.git
-cd interactive-git-visualizer
+git clone https://github.com/Sterlites/Widgets.git
+cd Widgets/LearnGit
 # Open index.html in your browser
 ```
 
@@ -103,7 +103,7 @@ cd interactive-git-visualizer
 ## 🧩 Project Structure
 
 ```
-interactive-git-visualizer/
+Widgets/LearnGit/
 ├── index.html          # Main HTML file with the widget structure
 ├── style.css           # CSS styles for the visualizer
 ├── script.js           # JavaScript code for Git simulation and visualization
@@ -135,7 +135,7 @@ To add new Git commands:
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! Here's how you can contribute:
+This tool is now yours to enhance! We've open-sourced it for the community to build upon. Here's how you can contribute:
 
 ### Reporting Issues
 
@@ -186,18 +186,22 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgements
 
-- Inspired by various Git visualization tools and educational resources
-- Special thanks to all contributors and the developer community
+- Created by the team at [Sterlites.com](https://sterlites.com) based on real-world experience
+- Built to address common Git learning challenges and reduce onboarding time
+- Designed to help teams reduce errors and improve Git workflow understanding
+- Now open-sourced for the community to enhance and build upon
 - Built with HTML, CSS, and vanilla JavaScript
 
 ## 📬 Contact
 
 If you have any questions, suggestions, or just want to say hello, please reach out:
 
-- GitHub Issues: [Create an issue](https://github.com/Sterlites/interactive-git-visualizer/issues)
+- GitHub Issues: [Create an issue](https://github.com/Sterlites/Widgets/issues)
 - GitHub: [Sterlites](https://github.com/Sterlites)
 - Twitter: [@rohit_dwivedi](https://twitter.com/rohit_dwivedi)
+- Website: [Sterlites.com](https://sterlites.com)
 
 ---
 
 <p align="center">Made with ❤️ for the developer community</p>
+<p align="center">Better tools create better developers. #LearnGit</p>
