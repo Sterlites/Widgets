@@ -13,7 +13,10 @@ body {
   background-color: #f4f4f4;
   color: #333;
   height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 header {
@@ -73,9 +76,9 @@ button:disabled {
 .container {
   display: grid;
   grid-template-columns: 300px 1fr;
-  grid-template-rows: calc(100vh - 70px);
+  grid-template-rows: calc(100vh - 100px);
   gap: 10px;
-  height: calc(100vh - 70px);
+  height: calc(100vh - 100px);
 }
 
 /* Left panel with commands and terminal */
@@ -472,6 +475,25 @@ button:disabled {
   border-radius: 3px;
   border: 1px solid #ddd;
   width: fit-content;
+}
+
+/* Footer styles */
+footer {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #666;
+  padding: 5px;
+  border-top: 1px solid #eee;
+}
+
+footer a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
 }
 
 /* Responsive adjustments for smaller screens */
