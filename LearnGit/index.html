@@ -7,98 +7,131 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Interactive Git Visualizer</h1>
-    <p>Learn Git by doing! Click commands and see what happens.</p>
+    <header>
+        <h1>Interactive Git Visualizer</h1>
+        <p>Learn Git by doing! Click commands and see what happens.</p>
+    </header>
 
     <div class="container">
-        <!-- Controls -->
-        <div class="controls-container">
-            <h2>Commands</h2>
-            <div class="command-group">
-                <h3>Setup & Basics</h3>
-                <button id="btn-init" title="Initialize a new Git repository here">git init</button>
-                <button id="btn-status" title="Show the status of changes">git status</button>
-                <button id="btn-log" title="Show commit history">git log</button>
-                <button id="btn-create-file" title="Create index.js in Working Dir">Create index.js</button>
-                <button id="btn-modify-file" title="Modify index.js in Working Dir">Modify index.js</button>
-                <button id="btn-create-config" title="Create config.prop in Working Dir">Create config.prop</button>
-                <button id="btn-add-gitignore" title="Add config.prop to .gitignore">Add .gitignore</button>
-            </div>
-             <div class="command-group">
-                <h3>Staging & Committing</h3>
-                <button id="btn-add-index" title="Add index.js to Staging Area">git add index.js</button>
-                <button id="btn-add-all" title="Add all tracked changes to Staging Area">git add .</button>
-                <button id="btn-commit" title="Commit staged changes to Local Repo">git commit -m "..."</button>
-                <button id="btn-commit-am" title="Stage all tracked files and commit">git commit -am "..."</button>
-                <button id="btn-diff" title="Show differences">git diff</button>
-             </div>
-             <div class="command-group">
-                <h3>Branches</h3>
-                <button id="btn-branch-feature" title="Create a new branch named 'feature'">git branch feature</button>
-                <button id="btn-checkout-feature" title="Switch to the 'feature' branch">git checkout feature</button>
-                <button id="btn-checkout-main" title="Switch to the 'main' branch">git checkout main</button>
-                <button id="btn-checkout-commit" title="Checkout a specific commit (Detached HEAD!)">git checkout <hash></button>
-                <button id="btn-merge-feature" title="Merge 'feature' branch into current branch">git merge feature</button>
-                <button id="btn-rebase-main" title="Rebase current branch onto 'main'">git rebase main</button>
+        <!-- Left Panel: Commands and Terminal -->
+        <div class="left-panel">
+            <!-- Commands Tabs -->
+            <div class="commands-container">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="basics">Basics</button>
+                    <button class="tab-btn" data-tab="staging">Staging</button>
+                    <button class="tab-btn" data-tab="branches">Branches</button>
+                    <button class="tab-btn" data-tab="remote">Remote</button>
+                    <button class="tab-btn" data-tab="advanced">Advanced</button>
                 </div>
-            <div class="command-group">
-                <h3>Remote (Simulated GitHub)</h3>
-                 <button id="btn-clone" title="Clone the remote repo (resets local)">git clone</button>
-                 <button id="btn-remote-add" title="Connect local repo to remote">git remote add origin</button>
-                 <button id="btn-push" title="Push current local branch to remote">git push</button>
-                 <button id="btn-push-feature-upstream" title="Push feature branch and set upstream">git push -u origin feature</button>
-                 <button id="btn-fetch" title="Download objects/refs from remote">git fetch</button>
-                 <button id="btn-pull" title="Fetch from and integrate with remote">git pull</button>
-                 <button id="btn-remote-commit" title="Simulate another dev pushing a commit">Remote Commit (Sim)</button>
+
+                <div class="tab-content">
+                    <!-- Setup & Basics Tab -->
+                    <div class="command-group active" id="basics">
+                        <button id="btn-init" title="Initialize a new Git repository here">git init</button>
+                        <button id="btn-status" title="Show the status of changes">git status</button>
+                        <button id="btn-log" title="Show commit history">git log</button>
+                        <button id="btn-create-file" title="Create index.js in Working Dir">Create index.js</button>
+                        <button id="btn-modify-file" title="Modify index.js in Working Dir">Modify index.js</button>
+                        <button id="btn-create-config" title="Create config.prop in Working Dir">Create config.prop</button>
+                        <button id="btn-add-gitignore" title="Add config.prop to .gitignore">Add .gitignore</button>
+                    </div>
+
+                    <!-- Staging & Committing Tab -->
+                    <div class="command-group" id="staging">
+                        <button id="btn-add-index" title="Add index.js to Staging Area">git add index.js</button>
+                        <button id="btn-add-all" title="Add all tracked changes to Staging Area">git add .</button>
+                        <button id="btn-commit" title="Commit staged changes to Local Repo">git commit -m "..."</button>
+                        <button id="btn-commit-am" title="Stage all tracked files and commit">git commit -am "..."</button>
+                        <button id="btn-diff" title="Show differences">git diff</button>
+                    </div>
+
+                    <!-- Branches Tab -->
+                    <div class="command-group" id="branches">
+                        <button id="btn-branch-feature" title="Create a new branch named 'feature'">git branch feature</button>
+                        <button id="btn-checkout-feature" title="Switch to the 'feature' branch">git checkout feature</button>
+                        <button id="btn-checkout-main" title="Switch to the 'main' branch">git checkout main</button>
+                        <button id="btn-checkout-commit" title="Checkout a specific commit (Detached HEAD!)">git checkout <hash></button>
+                        <button id="btn-merge-feature" title="Merge 'feature' branch into current branch">git merge feature</button>
+                        <button id="btn-rebase-main" title="Rebase current branch onto 'main'">git rebase main</button>
+                    </div>
+
+                    <!-- Remote Tab -->
+                    <div class="command-group" id="remote">
+                        <button id="btn-clone" title="Clone the remote repo (resets local)">git clone</button>
+                        <button id="btn-remote-add" title="Connect local repo to remote">git remote add origin</button>
+                        <button id="btn-push" title="Push current local branch to remote">git push</button>
+                        <button id="btn-push-feature-upstream" title="Push feature branch and set upstream">git push -u origin feature</button>
+                        <button id="btn-fetch" title="Download objects/refs from remote">git fetch</button>
+                        <button id="btn-pull" title="Fetch from and integrate with remote">git pull</button>
+                        <button id="btn-remote-commit" title="Simulate another dev pushing a commit">Remote Commit (Sim)</button>
+                    </div>
+
+                    <!-- Advanced Tab -->
+                    <div class="command-group" id="advanced">
+                        <button id="btn-stash" title="Stash current uncommitted changes">git stash</button>
+                        <button id="btn-stash-pop" title="Apply stashed changes">git stash pop</button>
+                    </div>
+                </div>
             </div>
-             <div class="command-group">
-                <h3>Advanced</h3>
-                <button id="btn-stash" title="Stash current uncommitted changes">git stash</button>
-                <button id="btn-stash-pop" title="Apply stashed changes">git stash pop</button>
+
+            <!-- Terminal Output -->
+            <div class="terminal-container">
+                <h3>Terminal Output</h3>
+                <pre id="terminal-output"></pre>
             </div>
         </div>
 
-        <!-- Visualizer -->
-        <div class="visualizer-container">
-            <div class="git-area" id="working-dir">
-                <h3>Working Directory</h3>
-                <div class="files"></div>
-            </div>
-            <div class="git-area" id="staging-area">
-                <h3>Staging Area (Index)</h3>
-                <div class="files"></div>
-            </div>
-            <div class="git-area repo" id="local-repo">
-                <h3>Local Repository (.git)</h3>
-                <div class="repo-content">
-                    <!-- Commits and branches will be drawn here by JS -->
+        <!-- Right Panel: Visualization and Explanation -->
+        <div class="right-panel">
+            <!-- Git Areas Visualization -->
+            <div class="visualizer-container">
+                <div class="top-row">
+                    <div class="git-area" id="working-dir">
+                        <h3>Working Directory</h3>
+                        <div class="files"></div>
+                    </div>
+                    <div class="git-area" id="staging-area">
+                        <h3>Staging Area (Index)</h3>
+                        <div class="files"></div>
+                    </div>
+                    <div class="git-area" id="stash-area">
+                        <h3>Stash</h3>
+                        <div class="files"></div>
+                    </div>
                 </div>
-                <div class="head-pointer" id="local-head">HEAD</div>
+                <div class="bottom-row">
+                    <div class="git-area repo" id="local-repo">
+                        <h3>Local Repository (.git)</h3>
+                        <div class="repo-content">
+                            <!-- Commits and branches will be drawn here by JS -->
+                        </div>
+                        <div class="head-pointer" id="local-head">HEAD</div>
+                        <div class="repo-files-container">
+                            <h4>Files in HEAD commit:</h4>
+                            <div class="repo-files" id="local-repo-files"></div>
+                        </div>
+                    </div>
+                    <div class="git-area repo" id="remote-repo">
+                        <h3>Remote Repository (origin)</h3>
+                        <div class="repo-content">
+                            <!-- Commits and branches will be drawn here by JS -->
+                        </div>
+                        <div class="url" id="remote-url">Not Connected</div>
+                        <div class="repo-files-container">
+                            <h4>Files in latest commit:</h4>
+                            <div class="repo-files" id="remote-repo-files"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="git-area repo" id="remote-repo">
-                <h3>Remote Repository (origin)</h3>
-                 <div class="repo-content">
-                     <!-- Commits and branches will be drawn here by JS -->
-                 </div>
-                 <div class="url" id="remote-url">Not Connected</div>
-            </div>
-             <div class="git-area" id="stash-area">
-                <h3>Stash</h3>
-                <div class="files"></div>
+
+            <!-- Explanation -->
+            <div class="explanation-container">
+                <h3>Explanation</h3>
+                <p id="explanation">Click 'git init' to start.</p>
             </div>
         </div>
-
-        <!-- Output & Explanation -->
-        <div class="output-explanation-container">
-             <div class="terminal-container">
-                 <h2>Terminal Output</h2>
-                 <pre id="terminal-output"></pre>
-             </div>
-             <div class="explanation-container">
-                 <h2>Explanation</h2>
-                 <p id="explanation">Click 'git init' to start.</p>
-             </div>
-         </div>
     </div>
 
     <script src="script.js"></script>
