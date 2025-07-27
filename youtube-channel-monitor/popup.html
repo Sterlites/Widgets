@@ -13,7 +13,7 @@
   <div class="section">
     <h3>Settings</h3>
     <div class="setting-row">
-      <label for="checkInterval">Check Interval (minutes):</label>
+      <label for="checkInterval">Check Interval:</label>
       <select id="checkInterval">
         <option value="5">5 minutes</option>
         <option value="15">15 minutes</option>
@@ -22,21 +22,26 @@
         <option value="180">3 hours</option>
       </select>
     </div>
-    <button id="checkNow" class="btn-primary">Check Now</button>
-    <button id="clearNotifications" class="btn-secondary">Clear Notifications</button>
-  </div>
-
-  <div class="section">
-    <h3>Monitored Channels</h3>
-    <div id="channelsList" class="channels-list">
-      Loading...
+    <div class="setting-row">
+      <label for="timeFilter">Show videos from:</label>
+      <select id="timeFilter">
+        <option value="1day">Last 24 hours</option>
+        <option value="1week">Last week</option>
+        <option value="1month">Last month</option>
+        <option value="1year">Last year</option>
+        <option value="lastcheck">Since last manual check</option>
+      </select>
+    </div>
+    <div class="button-row">
+      <button id="checkNow" class="btn-primary">Check Now</button>
+      <button id="clearData" class="btn-secondary">Clear All Data</button>
     </div>
   </div>
 
   <div class="section">
-    <h3>New Videos</h3>
-    <div id="notificationsList" class="notifications-list">
-      No new videos
+    <h3>Channel Status</h3>
+    <div id="channelResults" class="channel-results">
+      Loading...
     </div>
   </div>
 
@@ -45,7 +50,8 @@
     <div class="instructions">
       <p>1. Create a bookmarks folder named "Vid"</p>
       <p>2. Add YouTube channel /videos pages to this folder</p>
-      <p>3. The extension will automatically monitor for new uploads</p>
+      <p>3. Configure time filter to show relevant videos</p>
+      <p>4. Use "Check Now" to update and set manual check timestamp</p>
     </div>
   </div>
 

@@ -6,8 +6,7 @@ class PopupController {
 
   async init() {
     await this.loadSettings();
-    await this.updateChannelsList();
-    await this.updateNotificationsList();
+    await this.updateChannelResults();
     await this.updateStatus();
     this.setupEventListeners();
   }
@@ -17,20 +16,28 @@ class PopupController {
       this.saveCheckInterval(parseInt(e.target.value));
     });
 
+    document.getElementById('timeFilter').addEventListener('change', (e) => {
+      this.saveTimeFilter(e.target.value);
+      this.updateChannelResults();
+    });
+
     document.getElementById('checkNow').addEventListener('click', () => {
       this.checkNow();
     });
 
-    document.getElementById('clearNotifications').addEventListener('click', () => {
-      this.clearNotifications();
+    document.getElementById('clearData').addEventListener('click', () => {
+      this.clearAllData();
     });
   }
 
   async loadSettings() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['checkInterval'], (result) => {
+      chrome.storage.local.get(['checkInterval', 'timeFilter'], (result) => {
         const interval = result.checkInterval || 15;
+        const timeFilter = result.timeFilter || '1day';
+        
         document.getElementById('checkInterval').value = interval;
+        document.getElementById('timeFilter').value = timeFilter;
         resolve();
       });
     });
@@ -44,84 +51,183 @@ class PopupController {
     chrome.alarms.create('checkChannels', { periodInMinutes: minutes });
   }
 
+  async saveTimeFilter(filter) {
+    chrome.storage.local.set({ timeFilter: filter });
+  }
+
   async checkNow() {
     const button = document.getElementById('checkNow');
+    const originalText = button.textContent;
     button.textContent = 'Checking...';
     button.disabled = true;
 
-    // Send message to background script
-    chrome.runtime.sendMessage({ action: 'checkNow' });
+    try {
+      // Send message to background script for manual check
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ action: 'checkNow' }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(response);
+          }
+        });
+      });
 
-    setTimeout(async () => {
-      await this.updateNotificationsList();
+      if (!response || !response.success) {
+        throw new Error(response?.error || 'Check failed');
+      }
+
+      // Wait for background script to process
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      await this.updateChannelResults();
       await this.updateStatus();
-      button.textContent = 'Check Now';
+      
+    } catch (error) {
+      console.error('Check now failed:', error);
+      // Show error in UI
+      const status = document.getElementById('status');
+      const originalStatus = status.textContent;
+      status.textContent = `Error: ${error.message}`;
+      setTimeout(() => {
+        status.textContent = originalStatus;
+      }, 3000);
+    } finally {
+      button.textContent = originalText;
       button.disabled = false;
-    }, 3000);
+    }
   }
 
-  async clearNotifications() {
-    chrome.storage.local.set({ notifications: {} });
-    chrome.action.setBadgeText({ text: '' });
-    await this.updateNotificationsList();
+  async clearAllData() {
+    const confirmed = confirm('This will clear all stored video data and notifications. Continue?');
+    if (!confirmed) return;
+
+    try {
+      // Get all stored keys to clear video data
+      const items = await new Promise((resolve) => {
+        chrome.storage.local.get(null, resolve);
+      });
+
+      const keysToRemove = Object.keys(items).filter(key => 
+        key.startsWith('videos_') || 
+        key === 'channelResults' || 
+        key === 'lastManualCheck' ||
+        key === 'lastResultsUpdate' ||
+        key === 'lastTimeFilter'
+      );
+      
+      if (keysToRemove.length > 0) {
+        await new Promise((resolve) => {
+          chrome.storage.local.remove(keysToRemove, resolve);
+        });
+      }
+
+      // Clear badge
+      chrome.action.setBadgeText({ text: '' });
+      
+      // Update display
+      setTimeout(() => {
+        this.updateChannelResults();
+      }, 500);
+    } catch (error) {
+      console.error('Clear data failed:', error);
+    }
   }
 
-  async updateChannelsList() {
-    const channelsList = document.getElementById('channelsList');
+  async updateChannelResults() {
+    const resultsContainer = document.getElementById('channelResults');
     
     try {
-      const channels = await this.getChannelBookmarks();
+      const result = await new Promise((resolve) => {
+        chrome.storage.local.get(['channelResults', 'lastTimeFilter', 'timeFilter'], resolve);
+      });
       
-      if (channels.length === 0) {
-        channelsList.innerHTML = `
+      const channelResults = result.channelResults || [];
+      const currentTimeFilter = result.timeFilter || '1day';
+      
+      if (channelResults.length === 0) {
+        resultsContainer.innerHTML = `
           <div class="loading">
-            No channels found. Create a "Vid" bookmarks folder and add YouTube channel /videos pages.
+            No channel data available. Create a "Vid" bookmarks folder with YouTube channel /videos pages and click "Check Now".
           </div>
         `;
         return;
       }
 
-      channelsList.innerHTML = channels.map(channel => `
-        <div class="channel-item">
-          <div class="channel-title">${this.escapeHtml(channel.title)}</div>
-          <div class="channel-url">${this.escapeHtml(channel.url)}</div>
-        </div>
-      `).join('');
+      // Add time filter info
+      const timeFilterText = this.getTimeFilterText(currentTimeFilter);
+      let html = `<div class="time-filter-info">Showing videos from: ${timeFilterText}</div>`;
+
+      // Process each channel
+      html += channelResults.map(channel => {
+        if (channel.error) {
+          return `
+            <div class="channel-item">
+              <div class="channel-header">
+                <div class="channel-title">${this.escapeHtml(channel.channelTitle)}</div>
+                <div class="channel-stats">
+                  <span class="stat-badge error">Error</span>
+                </div>
+              </div>
+              <div class="error-message">${this.escapeHtml(channel.error)}</div>
+            </div>
+          `;
+        }
+
+        const newCount = channel.newVideos?.length || 0;
+        const filteredCount = channel.filteredVideos?.length || 0;
+        
+        let channelHtml = `
+          <div class="channel-item">
+            <div class="channel-header">
+              <div class="channel-title">${this.escapeHtml(channel.channelTitle)}</div>
+              <div class="channel-stats">
+                ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
+                <span class="stat-badge filtered">${filteredCount} in timeframe</span>
+              </div>
+            </div>
+        `;
+
+        if (filteredCount === 0) {
+          channelHtml += `<div class="no-videos">No videos found in selected timeframe</div>`;
+        } else {
+          const newVideoIds = new Set((channel.newVideos || []).map(v => v.id));
+          
+          channelHtml += `
+            <div class="videos-list">
+              ${(channel.filteredVideos || []).map(video => `
+                <div class="video-item ${newVideoIds.has(video.id) ? 'new' : ''}" 
+                     onclick="window.open('${video.url}', '_blank')">
+                  <div class="video-title">${this.escapeHtml(video.title)}</div>
+                  <div class="video-meta">
+                    <span class="video-published">${this.escapeHtml(video.published)}</span>
+                    ${newVideoIds.has(video.id) ? '<span class="new-indicator">NEW</span>' : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        channelHtml += `</div>`;
+        return channelHtml;
+      }).join('');
+
+      resultsContainer.innerHTML = html;
     } catch (error) {
-      channelsList.innerHTML = '<div class="loading">Error loading channels</div>';
+      console.error('Error updating channel results:', error);
+      resultsContainer.innerHTML = '<div class="loading">Error loading channel data</div>';
     }
   }
 
-  async updateNotificationsList() {
-    const notificationsList = document.getElementById('notificationsList');
-    
-    try {
-      const notifications = await this.getStoredNotifications();
-      const notificationEntries = Object.entries(notifications);
-      
-      if (notificationEntries.length === 0) {
-        notificationsList.innerHTML = '<div class="loading">No new videos</div>';
-        return;
-      }
-
-      notificationsList.innerHTML = notificationEntries.map(([key, notification]) => `
-        <div class="notification-item">
-          <div class="channel-title">
-            ${this.escapeHtml(notification.channelTitle)}
-            <span class="new-badge">${notification.newVideos.length} new</span>
-          </div>
-          ${notification.newVideos.map(video => `
-            <div class="video-item">
-              <div class="video-title" onclick="window.open('${video.url}', '_blank')">
-                ${this.escapeHtml(video.title)}
-              </div>
-              <div class="video-published">${this.escapeHtml(video.published)}</div>
-            </div>
-          `).join('')}
-        </div>
-      `).join('');
-    } catch (error) {
-      notificationsList.innerHTML = '<div class="loading">Error loading notifications</div>';
+  getTimeFilterText(filter) {
+    switch (filter) {
+      case '1day': return 'Last 24 hours';
+      case '1week': return 'Last week';
+      case '1month': return 'Last month';
+      case '1year': return 'Last year';
+      case 'lastcheck': return 'Since last manual check';
+      default: return 'Last 24 hours';
     }
   }
 
@@ -130,52 +236,34 @@ class PopupController {
     
     try {
       const result = await new Promise((resolve) => {
-        chrome.storage.local.get(['lastCheck'], resolve);
+        chrome.storage.local.get(['lastCheck', 'lastManualCheck'], resolve);
       });
+      
+      let statusText = '';
       
       if (result.lastCheck) {
         const lastCheck = new Date(result.lastCheck);
-        status.textContent = `Last checked: ${lastCheck.toLocaleTimeString()}`;
-      } else {
-        status.textContent = 'Never checked';
+        statusText = `Last auto-check: ${lastCheck.toLocaleTimeString()}`;
       }
+      
+      if (result.lastManualCheck) {
+        const lastManualCheck = new Date(result.lastManualCheck);
+        if (statusText) statusText += ' | ';
+        statusText += `Last manual check: ${lastManualCheck.toLocaleTimeString()}`;
+      }
+      
+      if (!statusText) {
+        statusText = 'Never checked';
+      }
+      
+      status.textContent = statusText;
     } catch (error) {
       status.textContent = 'Status unknown';
     }
   }
 
-  async getChannelBookmarks() {
-    const folder = await this.findVidFolder();
-    if (!folder) return [];
-
-    return new Promise((resolve) => {
-      chrome.bookmarks.getChildren(folder.id, (children) => {
-        const channelBookmarks = children.filter(bookmark => 
-          bookmark.url && bookmark.url.includes('youtube.com/@') && bookmark.url.includes('/videos')
-        );
-        resolve(channelBookmarks);
-      });
-    });
-  }
-
-  async findVidFolder() {
-    return new Promise((resolve) => {
-      chrome.bookmarks.search({ title: this.FOLDER_NAME }, (results) => {
-        const folder = results.find(item => !item.url);
-        resolve(folder);
-      });
-    });
-  }
-
-  async getStoredNotifications() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['notifications'], (result) => {
-        resolve(result.notifications || {});
-      });
-    });
-  }
-
   escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
