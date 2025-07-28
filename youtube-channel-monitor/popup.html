@@ -2,57 +2,245 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="header">
-    <h2>YouTube Channel Monitor</h2>
-    <div class="status" id="status">Checking...</div>
-  </div>
-
-  <div class="section">
-    <h3>Settings</h3>
-    <div class="setting-row">
-      <label for="checkInterval">Check Interval:</label>
-      <select id="checkInterval">
-        <option value="5">5 minutes</option>
-        <option value="15">15 minutes</option>
-        <option value="30">30 minutes</option>
-        <option value="60">1 hour</option>
-        <option value="180">3 hours</option>
-      </select>
-    </div>
-    <div class="setting-row">
-      <label for="timeFilter">Show videos from:</label>
-      <select id="timeFilter">
-        <option value="1day">Last 24 hours</option>
-        <option value="1week">Last week</option>
-        <option value="1month">Last month</option>
-        <option value="1year">Last year</option>
-        <option value="lastcheck">Since last manual check</option>
-      </select>
-    </div>
-    <div class="button-row">
-      <button id="checkNow" class="btn-primary">Check Now</button>
-      <button id="clearData" class="btn-secondary">Clear All Data</button>
+    <h2>
+      <span class="header-icon">📺</span>
+      YouTube Channel Monitor
+    </h2>
+    <div class="status" id="status">
+      <div class="status-indicator" id="statusIndicator"></div>
+      <span id="statusText">Initializing...</span>
     </div>
   </div>
 
-  <div class="section">
-    <h3>Channel Status</h3>
+  <!-- Quick Action Bar -->
+  <div class="quick-actions">
+    <button id="checkNow" class="btn-primary btn-quick">
+      <span class="btn-icon" id="checkNowIcon">🔄</span>
+      <span id="checkNowText">Check Now</span>
+    </button>
+    <div class="quick-stats" id="quickStats">
+      <span class="quick-stat">
+        <span class="stat-number" id="quickNewCount">0</span>
+        <span class="stat-label">New</span>
+      </span>
+      <span class="quick-stat">
+        <span class="stat-number" id="quickChannelCount">0</span>
+        <span class="stat-label">Channels</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Settings Section -->
+  <div class="section settings-section">
+    <div class="collapsible-header" data-target="settings">
+      <h3>
+        <span class="section-icon">⚙️</span>
+        Settings
+      </h3>
+      <span class="collapse-icon">▼</span>
+    </div>
+    <div class="collapsible-content" id="settings">
+      <div class="settings-grid">
+        <div class="setting-row">
+          <label for="checkInterval">
+            <span class="setting-icon">⏰</span>
+            Check Interval:
+          </label>
+          <select id="checkInterval">
+            <option value="5">5 minutes</option>
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="180">3 hours</option>
+            <option value="360">6 hours</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label for="timeFilter">
+            <span class="setting-icon">📅</span>
+            Show videos from:
+          </label>
+          <select id="timeFilter">
+            <option value="1hour">Last hour</option>
+            <option value="1day">Last 24 hours</option>
+            <option value="1week">Last week</option>
+            <option value="1month">Last month</option>
+            <option value="1year">Last year</option>
+            <option value="lastcheck">Since last manual check</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label for="notifications">
+            <span class="setting-icon">🔔</span>
+            Desktop Notifications:
+          </label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="notifications" class="toggle-input">
+            <label for="notifications" class="toggle-label"></label>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label for="autoOpen">
+            <span class="setting-icon">🔗</span>
+            Open videos in:
+          </label>
+          <select id="autoOpen">
+            <option value="current">Current tab</option>
+            <option value="new">New tab</option>
+            <option value="background">Background tab</option>
+          </select>
+        </div>
+      </div>
+      <div class="button-row">
+        <button id="clearData" class="btn-secondary">
+          <span class="btn-icon">🗑️</span>
+          Clear Data
+        </button>
+        <button id="exportData" class="btn-secondary">
+          <span class="btn-icon">💾</span>
+          Export
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Section -->
+  <div class="section results-section">
+    <div class="section-header">
+      <h3>
+        <span class="section-icon">📊</span>
+        Channel Status
+        <span class="loading-spinner" id="loadingSpinner"></span>
+      </h3>
+      <div class="controls">
+        <div class="view-controls">
+          <button id="gridView" class="btn-view active" title="Grid View">
+            <span class="btn-icon">⊞</span>
+          </button>
+          <button id="listView" class="btn-view" title="List View">
+            <span class="btn-icon">☰</span>
+          </button>
+          <button id="compactView" class="btn-view" title="Compact View">
+            <span class="btn-icon">▤</span>
+          </button>
+        </div>
+        <div class="sort-controls">
+          <select id="sortBy">
+            <option value="name">Channel Name</option>
+            <option value="new">New Videos</option>
+            <option value="filtered">Videos in Timeframe</option>
+            <option value="activity">Recent Activity</option>
+          </select>
+        </div>
+        <div class="expand-controls">
+          <button id="expandAll" class="btn-mini">Expand All</button>
+          <button id="collapseAll" class="btn-mini">Collapse All</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Filter Info -->
+    <div class="filter-info" id="filterInfo">
+      <div class="time-filter-display" id="timeFilterInfo">
+        Showing videos from: Last 24 hours
+      </div>
+      <div class="search-container">
+        <input type="text" id="searchChannels" placeholder="Search channels..." class="search-input">
+        <button id="clearSearch" class="search-clear" title="Clear search">×</button>
+      </div>
+    </div>
+    
+    <!-- Summary Stats -->
+    <div class="summary-stats" id="summaryStats">
+      <div class="stat-item">
+        <span class="stat-number">0</span>
+        <span class="stat-label">Channels</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number">0</span>
+        <span class="stat-label">New Videos</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number">0</span>
+        <span class="stat-label">In Timeframe</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number">0</span>
+        <span class="stat-label">Total Videos</span>
+      </div>
+    </div>
+
+    <!-- Channel Results -->
     <div id="channelResults" class="channel-results">
-      Loading...
+      <div class="loading">
+        <div class="loading-animation"></div>
+        <span>Loading channels...</span>
+      </div>
     </div>
   </div>
 
-  <div class="section">
-    <h3>Instructions</h3>
-    <div class="instructions">
-      <p>1. Create a bookmarks folder named "Vid"</p>
-      <p>2. Add YouTube channel /videos pages to this folder</p>
-      <p>3. Configure time filter to show relevant videos</p>
-      <p>4. Use "Check Now" to update and set manual check timestamp</p>
+  <!-- Instructions Section -->
+  <div class="section instructions-section">
+    <div class="collapsible-header" data-target="instructions">
+      <h3>
+        <span class="section-icon">📋</span>
+        Quick Start Guide
+      </h3>
+      <span class="collapse-icon">▶</span>
     </div>
+    <div class="collapsible-content collapsed" id="instructions">
+      <div class="instructions">
+        <div class="instruction-item">
+          <span class="instruction-number">1</span>
+          <div class="instruction-content">
+            <span class="instruction-text">Create a bookmarks folder named "Vid"</span>
+            <span class="instruction-detail">Right-click bookmarks bar → Add folder → Name it "Vid"</span>
+          </div>
+        </div>
+        <div class="instruction-item">
+          <span class="instruction-number">2</span>
+          <div class="instruction-content">
+            <span class="instruction-text">Add YouTube channel pages to this folder</span>
+            <span class="instruction-detail">Visit youtube.com/@channelname/videos and bookmark to "Vid" folder</span>
+          </div>
+        </div>
+        <div class="instruction-item">
+          <span class="instruction-number">3</span>
+          <div class="instruction-content">
+            <span class="instruction-text">Configure your preferences</span>
+            <span class="instruction-detail">Set check interval, time filter, and notification preferences</span>
+          </div>
+        </div>
+        <div class="instruction-item">
+          <span class="instruction-number">4</span>
+          <div class="instruction-content">
+            <span class="instruction-text">Click "Check Now" to start monitoring</span>
+            <span class="instruction-detail">Extension will automatically check for new videos based on your interval</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resize Handle and Status Bar -->
+  <div class="footer">
+    <div class="footer-info">
+      <span id="lastUpdate">Never updated</span>
+      <button id="refreshData" class="btn-icon-only" title="Refresh">
+        <span class="btn-icon">↻</span>
+      </button>
+    </div>
+    <div class="resize-handle" id="resizeHandle" title="Drag to resize"></div>
+  </div>
+
+  <!-- Keyboard Shortcuts Hint -->
+  <div class="keyboard-hints" id="keyboardHints">
+    <span>Press <kbd>R</kbd> to refresh • <kbd>S</kbd> to search • <kbd>Esc</kbd> to clear</span>
   </div>
 
   <script src="popup.js"></script>
