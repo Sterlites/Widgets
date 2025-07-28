@@ -5,28 +5,48 @@ class PopupController {
     this.viewMode = 'list';
     this.expandedChannels = new Set();
     this.searchQuery = '';
+    this.isChecking = false;
+    this.searchDebounceTimer = null;
+    this.toastQueue = [];
+    this.activeToasts = new Set();
+    
     this.settings = {
       notifications: false,
       autoOpen: 'current',
       checkInterval: 15,
-      timeFilter: '1day'
+      timeFilter: '1day',
+      darkMode: false
     };
+    
     this.init();
   }
 
   async init() {
-    await this.loadSettings();
-    await this.updateChannelResults();
-    await this.updateStatus();
-    this.setupEventListeners();
-    this.setupKeyboardShortcuts();
-    
-    // Auto-collapse instructions and settings on startup
-    this.toggleSection('instructions');
-    this.toggleSection('settings');
-    
-    // Show keyboard hints briefly
-    setTimeout(() => this.showKeyboardHints(), 1000);
+    try {
+      await this.loadSettings();
+      await this.updateChannelResults();
+      await this.updateStatus();
+      this.setupEventListeners();
+      this.setupKeyboardShortcuts();
+      this.setupAccessibility();
+      
+      // Auto-collapse sections on startup
+      this.toggleSection('instructions');
+      this.toggleSection('settings');
+      
+      // Show keyboard hints after a delay
+      setTimeout(() => this.showKeyboardHints(), 2000);
+      
+      // Setup auto-refresh
+      this.setupAutoRefresh();
+      
+      // Expose controller instance globally for debugging
+      window.popupController = this;
+      
+    } catch (error) {
+      console.error('Initialization failed:', error);
+      this.showToast('Failed to initialize extension', 'error');
+    }
   }
 
   setupEventListeners() {
@@ -36,6 +56,7 @@ class PopupController {
       this.settings.checkInterval = value;
       this.saveSettings();
       this.saveCheckInterval(value);
+      this.showToast(`Check interval updated to ${value} minutes`, 'success');
     });
 
     document.getElementById('timeFilter').addEventListener('change', (e) => {
@@ -43,6 +64,7 @@ class PopupController {
       this.saveSettings();
       this.saveTimeFilter(e.target.value);
       this.updateChannelResults();
+      this.showToast('Time filter updated', 'success');
     });
 
     document.getElementById('notifications').addEventListener('change', (e) => {
@@ -50,30 +72,36 @@ class PopupController {
       this.saveSettings();
       if (e.target.checked) {
         this.requestNotificationPermission();
+      } else {
+        this.showToast('Notifications disabled', 'info');
       }
     });
 
     document.getElementById('autoOpen').addEventListener('change', (e) => {
       this.settings.autoOpen = e.target.value;
       this.saveSettings();
+      this.showToast('Link opening preference updated', 'info');
+    });
+
+    document.getElementById('darkMode').addEventListener('change', (e) => {
+      this.settings.darkMode = e.target.checked;
+      this.saveSettings();
+      this.toggleDarkMode(e.target.checked);
     });
 
     // View controls
     document.getElementById('sortBy').addEventListener('change', (e) => {
       this.sortBy = e.target.value;
       this.updateChannelResults();
+      chrome.storage.local.set({ sortBy: this.sortBy });
     });
 
-    document.getElementById('gridView').addEventListener('click', () => {
-      this.setViewMode('grid');
-    });
-
-    document.getElementById('listView').addEventListener('click', () => {
-      this.setViewMode('list');
-    });
-
-    document.getElementById('compactView').addEventListener('click', () => {
-      this.setViewMode('compact');
+    // View mode buttons
+    ['listView', 'gridView', 'compactView'].forEach(id => {
+      document.getElementById(id).addEventListener('click', (e) => {
+        const mode = id.replace('View', '');
+        this.setViewMode(mode);
+      });
     });
 
     // Actions
@@ -89,8 +117,13 @@ class PopupController {
       this.exportData();
     });
 
+    document.getElementById('importData').addEventListener('click', () => {
+      this.importData();
+    });
+
     document.getElementById('refreshData').addEventListener('click', () => {
       this.updateChannelResults();
+      this.updateStatus();
     });
 
     document.getElementById('expandAll').addEventListener('click', () => {
@@ -101,16 +134,17 @@ class PopupController {
       this.collapseAllChannels();
     });
 
-    // Search
+    // Search with debouncing
     document.getElementById('searchChannels').addEventListener('input', (e) => {
-      this.searchQuery = e.target.value.toLowerCase();
-      this.filterChannels();
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = setTimeout(() => {
+        this.searchQuery = e.target.value.toLowerCase();
+        this.filterChannels();
+      }, 300);
     });
 
     document.getElementById('clearSearch').addEventListener('click', () => {
-      document.getElementById('searchChannels').value = '';
-      this.searchQuery = '';
-      this.filterChannels();
+      this.clearSearch();
     });
 
     // Collapsible sections
@@ -121,18 +155,47 @@ class PopupController {
           this.toggleSection(target);
         }
       });
+
+      // Keyboard support for collapsible headers
+      header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const target = header.getAttribute('data-target');
+          if (target) {
+            this.toggleSection(target);
+          }
+        }
+      });
     });
 
-    // Auto-refresh every 30 seconds
-    setInterval(() => {
-      this.updateStatus();
-    }, 30000);
+    // Help links
+    document.getElementById('helpLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      this.showHelpModal();
+    });
+
+    document.getElementById('feedbackLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      this.showFeedbackModal();
+    });
+
+    // Toggle switches keyboard support
+    document.querySelectorAll('.toggle-switch').forEach(toggle => {
+      toggle.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const input = toggle.querySelector('input');
+          input.checked = !input.checked;
+          input.dispatchEvent(new Event('change'));
+        }
+      });
+    });
   }
 
   setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
       // Don't interfere with input fields
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
         if (e.key === 'Escape') {
           e.target.blur();
           this.clearSearch();
@@ -140,6 +203,7 @@ class PopupController {
         return;
       }
 
+      // Handle shortcuts
       switch (e.key.toLowerCase()) {
         case 'r':
           e.preventDefault();
@@ -151,6 +215,7 @@ class PopupController {
           break;
         case 'escape':
           this.clearSearch();
+          this.hideKeyboardHints();
           break;
         case 'e':
           e.preventDefault();
@@ -172,160 +237,358 @@ class PopupController {
           e.preventDefault();
           this.setViewMode('compact');
           break;
+        case '?':
+        case '/':
+          e.preventDefault();
+          this.showKeyboardHints();
+          break;
+        case 'h':
+          e.preventDefault();
+          this.showHelpModal();
+          break;
       }
     });
+  }
+
+  setupAccessibility() {
+    // Setup focus management
+    this.setupFocusManagement();
+    
+    // Setup screen reader announcements
+    this.setupScreenReaderSupport();
+    
+    // Setup reduced motion support
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.body.classList.add('reduced-motion');
+    }
+  }
+
+  setupFocusManagement() {
+    // Ensure proper tab order and focus indicators
+    const focusableElements = document.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    
+    focusableElements.forEach(element => {
+      element.addEventListener('focus', () => {
+        element.classList.add('focus-visible');
+      });
+      
+      element.addEventListener('blur', () => {
+        element.classList.remove('focus-visible');
+      });
+    });
+  }
+
+  setupScreenReaderSupport() {
+    // Create live region for dynamic announcements
+    if (!document.getElementById('ariaLiveRegion')) {
+      const liveRegion = document.createElement('div');
+      liveRegion.id = 'ariaLiveRegion';
+      liveRegion.setAttribute('aria-live', 'polite');
+      liveRegion.setAttribute('aria-atomic', 'true');
+      liveRegion.className = 'sr-only';
+      document.body.appendChild(liveRegion);
+    }
+  }
+
+  announceToScreenReader(message) {
+    const liveRegion = document.getElementById('ariaLiveRegion');
+    if (liveRegion) {
+      liveRegion.textContent = message;
+      setTimeout(() => {
+        liveRegion.textContent = '';
+      }, 1000);
+    }
+  }
+
+  setupAutoRefresh() {
+    // Auto-refresh status every 30 seconds
+    setInterval(() => {
+      if (!this.isChecking) {
+        this.updateStatus();
+      }
+    }, 30000);
+  }
+
+  toggleDarkMode(enabled) {
+    document.documentElement.setAttribute('data-theme', enabled ? 'dark' : 'light');
+    this.showToast(`${enabled ? 'Dark' : 'Light'} mode enabled`, 'info');
   }
 
   showKeyboardHints() {
     const hints = document.getElementById('keyboardHints');
     hints.classList.add('show');
+    
     setTimeout(() => {
-      hints.classList.remove('show');
-    }, 3000);
+      this.hideKeyboardHints();
+    }, 5000);
+  }
+
+  hideKeyboardHints() {
+    const hints = document.getElementById('keyboardHints');
+    hints.classList.remove('show');
   }
 
   setViewMode(mode) {
     this.viewMode = mode;
     document.body.className = `view-${mode}`;
     
-    // Update active button
-    document.querySelectorAll('.btn-view').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`${mode}View`).classList.add('active');
+    // Update active button and ARIA states
+    document.querySelectorAll('.btn-view').forEach(btn => {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-pressed', 'false');
+    });
+    
+    const activeBtn = document.getElementById(`${mode}View`);
+    activeBtn.classList.add('active');
+    activeBtn.setAttribute('aria-pressed', 'true');
     
     // Save preference
     chrome.storage.local.set({ viewMode: mode });
+    this.announceToScreenReader(`View mode changed to ${mode}`);
   }
 
   filterChannels() {
     const channelItems = document.querySelectorAll('.channel-item');
+    let visibleCount = 0;
+    
     channelItems.forEach(item => {
       const title = item.querySelector('.channel-title')?.textContent.toLowerCase() || '';
       const url = item.querySelector('.channel-url')?.textContent.toLowerCase() || '';
       
       if (this.searchQuery === '' || title.includes(this.searchQuery) || url.includes(this.searchQuery)) {
         item.classList.remove('filtered');
+        item.style.display = '';
+        visibleCount++;
       } else {
         item.classList.add('filtered');
+        item.style.display = 'none';
       }
     });
+    
+    // Update search results announcement
+    if (this.searchQuery) {
+      this.announceToScreenReader(`${visibleCount} channels found for "${this.searchQuery}"`);
+    }
+    
+    // Show/hide clear button
+    const clearBtn = document.getElementById('clearSearch');
+    clearBtn.style.display = this.searchQuery ? 'flex' : 'none';
   }
 
   async requestNotificationPermission() {
     if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        this.settings.notifications = false;
-        document.getElementById('notifications').checked = false;
-        this.saveSettings();
-        this.showToast('Notification permission denied', 'error');
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          this.showToast('Notifications enabled successfully', 'success');
+        } else {
+          this.settings.notifications = false;
+          document.getElementById('notifications').checked = false;
+          this.saveSettings();
+          this.showToast('Notification permission denied', 'warning');
+        }
+      } catch (error) {
+        console.error('Notification permission error:', error);
+        this.showToast('Failed to enable notifications', 'error');
       }
+    } else {
+      this.showToast('Notifications not supported in this browser', 'warning');
     }
   }
 
   showToast(message, type = 'info') {
+    // Prevent duplicate toasts
+    const toastId = `${type}-${message}`;
+    if (this.activeToasts.has(toastId)) {
+      return;
+    }
+
+    const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
-    document.body.appendChild(toast);
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
     
-    setTimeout(() => toast.classList.add('show'), 10);
+    container.appendChild(toast);
+    this.activeToasts.add(toastId);
+    
+    // Show toast with animation
+    requestAnimationFrame(() => {
+      toast.classList.add('show');
+    });
+    
+    // Auto-remove toast
     setTimeout(() => {
       toast.classList.remove('show');
-      setTimeout(() => document.body.removeChild(toast), 300);
-    }, 3000);
+      setTimeout(() => {
+        if (container.contains(toast)) {
+          container.removeChild(toast);
+        }
+        this.activeToasts.delete(toastId);
+      }, 300);
+    }, 4000);
   }
 
   toggleSection(sectionId) {
     const content = document.getElementById(sectionId);
     const header = content.previousElementSibling;
     const icon = header.querySelector('.collapse-icon');
+    const isCollapsed = content.classList.contains('collapsed');
     
-    if (content.classList.contains('collapsed')) {
+    if (isCollapsed) {
       content.classList.remove('collapsed');
+      header.setAttribute('aria-expanded', 'true');
       icon.textContent = '▼';
+      this.announceToScreenReader(`${sectionId} section expanded`);
     } else {
       content.classList.add('collapsed');
+      header.setAttribute('aria-expanded', 'false');
       icon.textContent = '▶';
+      this.announceToScreenReader(`${sectionId} section collapsed`);
     }
   }
 
   expandAllChannels() {
     const channelItems = document.querySelectorAll('.channel-item');
+    let expandedCount = 0;
+    
     channelItems.forEach(item => {
-      item.classList.remove('collapsed');
-      const toggle = item.querySelector('.collapse-toggle');
-      if (toggle) toggle.textContent = '▼';
+      if (item.classList.contains('collapsed')) {
+        item.classList.remove('collapsed');
+        const toggle = item.querySelector('.collapse-toggle');
+        if (toggle) toggle.textContent = '▼';
+        expandedCount++;
+      }
     });
+    
+    if (expandedCount > 0) {
+      this.showToast(`Expanded ${expandedCount} channels`, 'info');
+      this.announceToScreenReader(`${expandedCount} channels expanded`);
+    }
   }
 
   collapseAllChannels() {
     const channelItems = document.querySelectorAll('.channel-item');
+    let collapsedCount = 0;
+    
     channelItems.forEach(item => {
-      item.classList.add('collapsed');
-      const toggle = item.querySelector('.collapse-toggle');
-      if (toggle) toggle.textContent = '▶';
+      if (!item.classList.contains('collapsed')) {
+        item.classList.add('collapsed');
+        const toggle = item.querySelector('.collapse-toggle');
+        if (toggle) toggle.textContent = '▶';
+        collapsedCount++;
+      }
     });
+    
+    if (collapsedCount > 0) {
+      this.showToast(`Collapsed ${collapsedCount} channels`, 'info');
+      this.announceToScreenReader(`${collapsedCount} channels collapsed`);
+    }
   }
 
   async loadSettings() {
     return new Promise((resolve) => {
       chrome.storage.local.get([
-        'checkInterval', 'timeFilter', 'sortBy', 'viewMode', 'notifications', 'autoOpen'
+        'checkInterval', 'timeFilter', 'sortBy', 'viewMode', 
+        'notifications', 'autoOpen', 'darkMode'
       ], (result) => {
         this.settings.checkInterval = result.checkInterval || 15;
         this.settings.timeFilter = result.timeFilter || '1day';
         this.settings.notifications = result.notifications || false;
         this.settings.autoOpen = result.autoOpen || 'current';
+        this.settings.darkMode = result.darkMode || false;
         this.sortBy = result.sortBy || 'name';
         this.viewMode = result.viewMode || 'list';
         
-        // Update UI
-        document.getElementById('checkInterval').value = this.settings.checkInterval;
-        document.getElementById('timeFilter').value = this.settings.timeFilter;
-        document.getElementById('sortBy').value = this.sortBy;
-        document.getElementById('notifications').checked = this.settings.notifications;
-        document.getElementById('autoOpen').value = this.settings.autoOpen;
-        
+        // Update UI elements
+        this.updateSettingsUI();
         this.setViewMode(this.viewMode);
+        this.toggleDarkMode(this.settings.darkMode);
+        
         resolve();
       });
     });
   }
 
+  updateSettingsUI() {
+    document.getElementById('checkInterval').value = this.settings.checkInterval;
+    document.getElementById('timeFilter').value = this.settings.timeFilter;
+    document.getElementById('sortBy').value = this.sortBy;
+    document.getElementById('notifications').checked = this.settings.notifications;
+    document.getElementById('autoOpen').value = this.settings.autoOpen;
+    document.getElementById('darkMode').checked = this.settings.darkMode;
+  }
+
   async saveSettings() {
-    chrome.storage.local.set(this.settings);
+    try {
+      await chrome.storage.local.set(this.settings);
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      this.showToast('Failed to save settings', 'error');
+    }
   }
 
   async saveCheckInterval(minutes) {
-    chrome.storage.local.set({ checkInterval: minutes });
-    chrome.alarms.clear('checkChannels');
-    chrome.alarms.create('checkChannels', { periodInMinutes: minutes });
+    try {
+      await chrome.storage.local.set({ checkInterval: minutes });
+      await chrome.alarms.clear('checkChannels');
+      await chrome.alarms.create('checkChannels', { periodInMinutes: minutes });
+    } catch (error) {
+      console.error('Failed to save check interval:', error);
+      this.showToast('Failed to update check interval', 'error');
+    }
   }
 
   async saveTimeFilter(filter) {
-    chrome.storage.local.set({ timeFilter: filter });
+    try {
+      await chrome.storage.local.set({ timeFilter: filter });
+    } catch (error) {
+      console.error('Failed to save time filter:', error);
+      this.showToast('Failed to update time filter', 'error');
+    }
   }
 
   async checkNow() {
+    if (this.isChecking) {
+      this.showToast('Check already in progress', 'warning');
+      return;
+    }
+
     const button = document.getElementById('checkNow');
     const icon = document.getElementById('checkNowIcon');
     const text = document.getElementById('checkNowText');
     const spinner = document.getElementById('loadingSpinner');
     const statusIndicator = document.getElementById('statusIndicator');
+    const progressBar = document.getElementById('progressBar');
+    const headerProgress = document.getElementById('headerProgress');
     
     const originalIcon = icon.textContent;
     const originalText = text.textContent;
     
     // Update UI state
+    this.isChecking = true;
     icon.textContent = '⏳';
     text.textContent = 'Checking...';
     button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
     spinner.classList.add('active');
     statusIndicator.classList.add('checking');
+    headerProgress.classList.add('active');
+    progressBar.classList.add('active');
 
     try {
+      this.announceToScreenReader('Starting channel check');
+      
       const response = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Check timeout - please try again'));
+        }, 60000); // 60 second timeout
+
         chrome.runtime.sendMessage({ action: 'checkNow' }, (response) => {
+          clearTimeout(timeout);
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
           } else {
@@ -335,7 +598,7 @@ class PopupController {
       });
 
       if (!response || !response.success) {
-        throw new Error(response?.error || 'Check failed');
+        throw new Error(response?.error || 'Check failed - please try again');
       }
 
       // Success feedback
@@ -343,14 +606,12 @@ class PopupController {
       text.textContent = 'Updated!';
       statusIndicator.classList.remove('checking');
       this.showToast('Channels updated successfully', 'success');
+      this.announceToScreenReader('Channel check completed successfully');
       
       setTimeout(async () => {
         await this.updateChannelResults();
         await this.updateStatus();
-        icon.textContent = originalIcon;
-        text.textContent = originalText;
-        button.disabled = false;
-        spinner.classList.remove('active');
+        this.resetCheckButton(button, icon, text, spinner, headerProgress, progressBar, originalIcon, originalText);
       }, 2000);
       
     } catch (error) {
@@ -360,22 +621,37 @@ class PopupController {
       statusIndicator.classList.remove('checking');
       statusIndicator.classList.add('error');
       this.showToast(`Error: ${error.message}`, 'error');
+      this.announceToScreenReader(`Channel check failed: ${error.message}`);
       
       setTimeout(() => {
-        icon.textContent = originalIcon;
-        text.textContent = originalText;
-        button.disabled = false;
-        spinner.classList.remove('active');
+        this.resetCheckButton(button, icon, text, spinner, headerProgress, progressBar, originalIcon, originalText);
         statusIndicator.classList.remove('error');
       }, 3000);
     }
   }
 
+  resetCheckButton(button, icon, text, spinner, headerProgress, progressBar, originalIcon, originalText) {
+    this.isChecking = false;
+    icon.textContent = originalIcon;
+    text.textContent = originalText;
+    button.disabled = false;
+    button.setAttribute('aria-busy', 'false');
+    spinner.classList.remove('active');
+    headerProgress.classList.remove('active');
+    progressBar.classList.remove('active');
+  }
+
   async clearAllData() {
-    const confirmed = confirm('This will clear all stored video data and notifications. Continue?');
+    const confirmed = confirm(
+      'This will clear all stored video data and reset your monitoring history. ' +
+      'Your settings will be preserved. Continue?'
+    );
+    
     if (!confirmed) return;
 
     try {
+      this.showToast('Clearing data...', 'info');
+      
       const items = await new Promise((resolve) => {
         chrome.storage.local.get(null, resolve);
       });
@@ -394,12 +670,16 @@ class PopupController {
         });
       }
 
-      chrome.action.setBadgeText({ text: '' });
+      // Clear badge
+      await chrome.action.setBadgeText({ text: '' });
+      
       this.showToast('Data cleared successfully', 'success');
+      this.announceToScreenReader('All monitoring data has been cleared');
       
       setTimeout(() => {
         this.updateChannelResults();
       }, 500);
+      
     } catch (error) {
       console.error('Clear data failed:', error);
       this.showToast('Failed to clear data', 'error');
@@ -408,31 +688,102 @@ class PopupController {
 
   async exportData() {
     try {
+      this.showToast('Preparing export...', 'info');
+      
       const result = await new Promise((resolve) => {
-        chrome.storage.local.get(['channelResults'], resolve);
+        chrome.storage.local.get(['channelResults', 'settings'], resolve);
       });
       
       const data = {
         exportDate: new Date().toISOString(),
         version: '1.1.0',
-        channelResults: result.channelResults || []
+        channelResults: result.channelResults || [],
+        settings: this.settings,
+        metadata: {
+          totalChannels: (result.channelResults || []).length,
+          exportedBy: 'YouTube Channel Monitor Extension'
+        }
       };
       
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { 
+        type: 'application/json' 
+      });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a');
       a.href = url;
       a.download = `youtube-monitor-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
       this.showToast('Data exported successfully', 'success');
+      this.announceToScreenReader('Data export completed');
+      
     } catch (error) {
       console.error('Export failed:', error);
       this.showToast('Failed to export data', 'error');
+    }
+  }
+
+  async importData() {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.style.display = 'none';
+      
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+          this.showToast('Importing data...', 'info');
+          
+          const text = await file.text();
+          const data = JSON.parse(text);
+          
+          // Validate import data
+          if (!data.channelResults || !Array.isArray(data.channelResults)) {
+            throw new Error('Invalid import file format');
+          }
+          
+          // Import data
+          await chrome.storage.local.set({
+            channelResults: data.channelResults,
+            lastResultsUpdate: Date.now()
+          });
+          
+          // Optionally import settings
+          if (data.settings && confirm('Import settings as well?')) {
+            Object.assign(this.settings, data.settings);
+            await this.saveSettings();
+            this.updateSettingsUI();
+          }
+          
+          this.showToast(`Imported ${data.channelResults.length} channels`, 'success');
+          this.announceToScreenReader(`Import completed with ${data.channelResults.length} channels`);
+          
+          setTimeout(() => {
+            this.updateChannelResults();
+          }, 500);
+          
+        } catch (error) {
+          console.error('Import failed:', error);
+          this.showToast('Failed to import data - invalid file format', 'error');
+        }
+        
+        document.body.removeChild(input);
+      };
+      
+      document.body.appendChild(input);
+      input.click();
+      
+    } catch (error) {
+      console.error('Import setup failed:', error);
+      this.showToast('Failed to setup import', 'error');
     }
   }
 
@@ -480,6 +831,8 @@ class PopupController {
     const resultsContainer = document.getElementById('channelResults');
     
     try {
+      this.showLoadingSkeleton(resultsContainer);
+      
       const result = await new Promise((resolve) => {
         chrome.storage.local.get(['channelResults', 'lastTimeFilter', 'timeFilter'], resolve);
       });
@@ -494,7 +847,7 @@ class PopupController {
       if (channelResults.length === 0) {
         resultsContainer.innerHTML = this.getEmptyState();
         this.updateSummaryStats(0, 0, 0, 0);
-        this.updateQuickStats(0, 0);
+        this.updateQuickStats(0, 0, 0);
         return;
       }
 
@@ -506,17 +859,24 @@ class PopupController {
       let totalNewVideos = channelResults.reduce((sum, ch) => sum + (ch.newVideos?.length || 0), 0);
       let totalFiltered = channelResults.reduce((sum, ch) => sum + (ch.filteredVideos?.length || 0), 0);
       let totalVideos = channelResults.reduce((sum, ch) => sum + (ch.totalVideos || 0), 0);
+      let activeChannels = channelResults.filter(ch => (ch.filteredVideos?.length || 0) > 0).length;
       
       this.updateSummaryStats(totalChannels, totalNewVideos, totalFiltered, totalVideos);
-      this.updateQuickStats(totalNewVideos, totalChannels);
+      this.updateQuickStats(totalNewVideos, totalChannels, activeChannels);
 
-      // Generate channel HTML
+      // Generate channel HTML with staggered animation
       const channelsHtml = channelResults.map((channel, index) => 
         this.generateChannelHtml(channel, index)
       ).join('');
 
       resultsContainer.innerHTML = channelsHtml;
-      resultsContainer.classList.add('fade-in');
+      
+      // Add staggered fade-in animation
+      const channelItems = resultsContainer.querySelectorAll('.channel-item');
+      channelItems.forEach((item, index) => {
+        item.style.animationDelay = `${index * 50}ms`;
+        item.classList.add('fade-in');
+      });
 
       // Add event listeners after DOM is updated
       this.setupChannelListeners();
@@ -526,86 +886,107 @@ class PopupController {
         this.filterChannels();
       }
 
-    } catch (error) {
-      console.error('Error updating channel results:', error);
-      resultsContainer.innerHTML = '<div class="loading">Error loading channel data</div>';
-    }
-  }
+// Announce update to screen readers
+     this.announceToScreenReader(
+       `Channel results updated. ${totalChannels} channels, ${totalNewVideos} new videos`
+     );
 
-  updateSummaryStats(channels, newVideos, filtered, total) {
-    const statsContainer = document.getElementById('summaryStats');
-    statsContainer.innerHTML = `
-      <div class="stat-item">
-        <span class="stat-number">${channels}</span>
-        <span class="stat-label">Channels</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-number">${newVideos}</span>
-        <span class="stat-label">New Videos</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-number">${filtered}</span>
-        <span class="stat-label">In Timeframe</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-number">${total}</span>
-        <span class="stat-label">Total Videos</span>
-      </div>
-    `;
-  }
+   } catch (error) {
+     console.error('Error updating channel results:', error);
+     resultsContainer.innerHTML = this.getErrorState('Failed to load channel data');
+     this.showToast('Failed to load channel data', 'error');
+   }
+ }
 
-  updateQuickStats(newVideos, channels) {
-    document.getElementById('quickNewCount').textContent = newVideos;
-    document.getElementById('quickChannelCount').textContent = channels;
-  }
+ showLoadingSkeleton(container) {
+   container.innerHTML = `
+     <div class="loading">
+       <div class="loading-animation" role="img" aria-label="Loading"></div>
+       <span>Loading channels...</span>
+     </div>
+   `;
+ }
 
-  generateChannelHtml(channel, index) {
-    if (channel.error) {
-      return `
-        <div class="channel-item fade-in" data-channel="${index}">
-          <div class="channel-header">
-            <div class="channel-info">
-              <div class="channel-title">${this.escapeHtml(channel.channelTitle)}</div>
-              <div class="channel-url">${this.escapeHtml(channel.channelUrl)}</div>
-            </div>
-            <div class="channel-stats">
-              <span class="stat-badge error">Error</span>
-            </div>
-          </div>
-          <div class="error-message">${this.escapeHtml(channel.error)}</div>
-        </div>
-      `;
-    }
+ updateSummaryStats(channels, newVideos, filtered, total) {
+   const statsContainer = document.getElementById('summaryStats');
+   const stats = [
+     { number: channels, label: 'Channels', ariaLabel: 'Total channels monitored' },
+     { number: newVideos, label: 'New Videos', ariaLabel: 'New videos found' },
+     { number: filtered, label: 'In Timeframe', ariaLabel: 'Videos in current timeframe' },
+     { number: total, label: 'Total Videos', ariaLabel: 'Total videos across all channels' }
+   ];
 
-    const newCount = channel.newVideos?.length || 0;
-    const filteredCount = channel.filteredVideos?.length || 0;
-    const totalCount = channel.totalVideos || 0;
-    const hasActivity = filteredCount > 0;
-    const hasNew = newCount > 0;
+   statsContainer.innerHTML = stats.map(stat => `
+     <div class="stat-item" role="img" aria-label="${stat.ariaLabel}: ${stat.number}">
+       <span class="stat-number">${this.formatNumber(stat.number)}</span>
+       <span class="stat-label">${stat.label}</span>
+     </div>
+   `).join('');
+ }
 
-    // Auto-collapse channels with no activity
-    const isCollapsed = !hasActivity;
-    const collapseClass = isCollapsed ? 'collapsed' : '';
-    const collapseIcon = isCollapsed ? '▶' : '▼';
+ updateQuickStats(newVideos, channels, active) {
+   document.getElementById('quickNewCount').textContent = this.formatNumber(newVideos);
+   document.getElementById('quickChannelCount').textContent = this.formatNumber(channels);
+   document.getElementById('quickStatusCount').textContent = this.formatNumber(active);
+ }
 
-    let channelClasses = ['channel-item', 'fade-in'];
-    if (hasNew) channelClasses.push('has-new');
-    if (!hasActivity) channelClasses.push('no-activity');
-    if (isCollapsed) channelClasses.push('collapsed');
+ formatNumber(num) {
+   if (num >= 1000000) {
+     return (num / 1000000).toFixed(1) + 'M';
+   } else if (num >= 1000) {
+     return (num / 1000).toFixed(1) + 'K';
+   }
+   return num.toString();
+ }
 
-    let channelHtml = `
-      <div class="${channelClasses.join(' ')}" data-channel="${index}">
-        <div class="channel-header" data-toggle-channel="${index}">
-          <div class="channel-info">
-            <div class="channel-title">${this.escapeHtml(channel.channelTitle)}</div>
-            <div class="channel-url">${this.escapeHtml(channel.channelUrl)}</div>
-          </div>
-          <div class="channel-stats">
-${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
+ generateChannelHtml(channel, index) {
+   if (channel.error) {
+     return `
+       <div class="channel-item fade-in" data-channel="${index}" role="article" aria-labelledby="channel-${index}-title">
+         <div class="channel-header">
+           <div class="channel-info">
+             <div id="channel-${index}-title" class="channel-title">${this.escapeHtml(channel.channelTitle)}</div>
+             <div class="channel-url">${this.escapeHtml(channel.channelUrl)}</div>
+           </div>
+           <div class="channel-stats">
+             <span class="stat-badge error" role="alert">Error</span>
+           </div>
+         </div>
+         <div class="error-message" role="alert">${this.escapeHtml(channel.error)}</div>
+       </div>
+     `;
+   }
+
+   const newCount = channel.newVideos?.length || 0;
+   const filteredCount = channel.filteredVideos?.length || 0;
+   const totalCount = channel.totalVideos || 0;
+   const hasActivity = filteredCount > 0;
+   const hasNew = newCount > 0;
+
+   // Auto-collapse channels with no activity
+   const isCollapsed = !hasActivity;
+   const collapseClass = isCollapsed ? 'collapsed' : '';
+   const collapseIcon = isCollapsed ? '▶' : '▼';
+
+   let channelClasses = ['channel-item', 'fade-in'];
+   if (hasNew) channelClasses.push('has-new');
+   if (!hasActivity) channelClasses.push('no-activity');
+   if (isCollapsed) channelClasses.push('collapsed');
+
+   let channelHtml = `
+     <div class="${channelClasses.join(' ')}" data-channel="${index}" role="article" aria-labelledby="channel-${index}-title">
+       <div class="channel-header" data-toggle-channel="${index}" role="button" tabindex="0" 
+            aria-expanded="${!isCollapsed}" aria-controls="videos-${index}">
+         <div class="channel-info">
+           <div id="channel-${index}-title" class="channel-title">${this.escapeHtml(channel.channelTitle)}</div>
+           <div class="channel-url">${this.escapeHtml(channel.channelUrl)}</div>
+         </div>
+         <div class="channel-stats">
+           ${newCount > 0 ? `<span class="stat-badge new" role="status">${newCount} new</span>` : ''}
            <span class="stat-badge ${filteredCount === 0 ? 'zero' : 'filtered'}">
              ${filteredCount} in timeframe
            </span>
-           <span class="collapse-toggle">${collapseIcon}</span>
+           <span class="collapse-toggle" aria-hidden="true">${collapseIcon}</span>
          </div>
        </div>
    `;
@@ -616,16 +997,17 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
      const newVideoIds = new Set((channel.newVideos || []).map(v => v.id));
      
      channelHtml += `
-       <div class="videos-list">
-         ${(channel.filteredVideos || []).map(video => `
+       <div id="videos-${index}" class="videos-list" role="region" aria-labelledby="channel-${index}-title">
+         ${(channel.filteredVideos || []).map((video, videoIndex) => `
            <div class="video-item ${newVideoIds.has(video.id) ? 'new' : ''}" 
-                data-video-url="${video.url}">
+                data-video-url="${video.url}" role="button" tabindex="0"
+                aria-describedby="video-${index}-${videoIndex}-published">
              <div class="video-content">
                <div class="video-title">${this.escapeHtml(video.title)}</div>
-               <div class="video-published">${this.escapeHtml(video.published)}</div>
+               <div id="video-${index}-${videoIndex}-published" class="video-published">${this.escapeHtml(video.published)}</div>
              </div>
              <div class="video-badges">
-               ${newVideoIds.has(video.id) ? '<span class="new-indicator">NEW</span>' : ''}
+               ${newVideoIds.has(video.id) ? '<span class="new-indicator" role="status" aria-label="New video">NEW</span>' : ''}
              </div>
            </div>
          `).join('')}
@@ -644,6 +1026,15 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
        const index = header.getAttribute('data-toggle-channel');
        this.toggleChannel(parseInt(index));
      });
+
+     // Keyboard support
+     header.addEventListener('keydown', (e) => {
+       if (e.key === 'Enter' || e.key === ' ') {
+         e.preventDefault();
+         const index = header.getAttribute('data-toggle-channel');
+         this.toggleChannel(parseInt(index));
+       }
+     });
    });
 
    // Add click listeners for video items
@@ -652,18 +1043,31 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
        const videoUrl = videoItem.getAttribute('data-video-url');
        this.openVideo(videoUrl);
      });
+
+     // Keyboard support
+     videoItem.addEventListener('keydown', (e) => {
+       if (e.key === 'Enter' || e.key === ' ') {
+         e.preventDefault();
+         const videoUrl = videoItem.getAttribute('data-video-url');
+         this.openVideo(videoUrl);
+       }
+     });
    });
  }
 
  toggleChannel(index) {
    const channelItem = document.querySelector(`[data-channel="${index}"]`);
+   const header = channelItem.querySelector('[data-toggle-channel]');
    const toggle = channelItem.querySelector('.collapse-toggle');
+   const isCollapsed = channelItem.classList.contains('collapsed');
    
-   if (channelItem.classList.contains('collapsed')) {
+   if (isCollapsed) {
      channelItem.classList.remove('collapsed');
+     header.setAttribute('aria-expanded', 'true');
      toggle.textContent = '▼';
    } else {
      channelItem.classList.add('collapsed');
+     header.setAttribute('aria-expanded', 'false');
      toggle.textContent = '▶';
    }
  }
@@ -681,11 +1085,16 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
        }
      } else if (openMode === 'background') {
        await chrome.tabs.create({ url: videoUrl, active: false });
+       this.showToast('Video opened in background tab', 'info');
      } else {
        await chrome.tabs.create({ url: videoUrl });
      }
      
-     window.close();
+     // Don't close popup immediately in background mode
+     if (openMode !== 'background') {
+       window.close();
+     }
+     
    } catch (error) {
      console.error('Failed to open video:', error);
      this.showToast('Failed to open video', 'error');
@@ -693,17 +1102,32 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
  }
 
  clearSearch() {
-   document.getElementById('searchChannels').value = '';
+   const searchInput = document.getElementById('searchChannels');
+   searchInput.value = '';
    this.searchQuery = '';
    this.filterChannels();
+   this.announceToScreenReader('Search cleared');
  }
 
  getEmptyState() {
    return `
-     <div class="empty-state fade-in">
+     <div class="empty-state fade-in" role="img" aria-label="No channels found">
        <div class="empty-state-icon">📺</div>
        <h4>No Channels Found</h4>
-       <p>Create a "Vid" bookmarks folder and add YouTube channel /videos pages, then click "Check Now" to get started.</p>
+       <p>
+         Create a "Vid" bookmarks folder and add YouTube channel /videos pages, 
+         then click "Check Now" to get started.
+       </p>
+     </div>
+   `;
+ }
+
+ getErrorState(message) {
+   return `
+     <div class="empty-state fade-in" role="alert">
+       <div class="empty-state-icon">⚠️</div>
+       <h4>Error Loading Data</h4>
+       <p>${this.escapeHtml(message)}</p>
      </div>
    `;
  }
@@ -723,14 +1147,22 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
  async updateStatus() {
    const statusText = document.getElementById('statusText');
    const lastUpdate = document.getElementById('lastUpdate');
+   const statusIndicator = document.getElementById('statusIndicator');
    
    try {
      const result = await new Promise((resolve) => {
-       chrome.storage.local.get(['lastCheck', 'lastManualCheck'], resolve);
+       chrome.storage.local.get(['lastCheck', 'lastManualCheck', 'lastCheckSuccess'], resolve);
      });
      
      let mainStatus = '';
      let updateTime = '';
+     
+     // Update status indicator
+     if (result.lastCheckSuccess !== false) {
+       statusIndicator.classList.remove('error');
+     } else {
+       statusIndicator.classList.add('error');
+     }
      
      if (result.lastCheck) {
        const lastCheck = new Date(result.lastCheck);
@@ -746,7 +1178,8 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
          if (diffHours < 24) {
            mainStatus = `Last check: ${diffHours}h ago`;
          } else {
-           mainStatus = `Last check: ${lastCheck.toLocaleDateString()}`;
+           const diffDays = Math.floor(diffHours / 24);
+           mainStatus = `Last check: ${diffDays}d ago`;
          }
        }
      }
@@ -758,14 +1191,30 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
      
      if (!mainStatus) {
        mainStatus = 'Never checked - Click "Check Now" to start';
+       statusIndicator.classList.add('error');
      }
      
      statusText.textContent = mainStatus;
      lastUpdate.textContent = updateTime || 'Never updated manually';
+     
    } catch (error) {
+     console.error('Failed to update status:', error);
      statusText.textContent = 'Status unknown';
      lastUpdate.textContent = 'Update time unknown';
+     statusIndicator.classList.add('error');
    }
+ }
+
+ showHelpModal() {
+   this.showToast('Opening help documentation...', 'info');
+   // In a real implementation, you might open a help page or modal
+   console.log('Help modal would open here');
+ }
+
+ showFeedbackModal() {
+   this.showToast('Opening feedback form...', 'info');
+   // In a real implementation, you might open a feedback form
+   console.log('Feedback modal would open here');
  }
 
  escapeHtml(text) {
@@ -774,9 +1223,123 @@ ${newCount > 0 ? `<span class="stat-badge new">${newCount} new</span>` : ''}
    div.textContent = text;
    return div.innerHTML;
  }
+
+ // Utility method for smooth scrolling
+ smoothScrollToElement(element) {
+   element.scrollIntoView({
+     behavior: 'smooth',
+     block: 'nearest',
+     inline: 'start'
+   });
+ }
+
+ // Method to handle window resize
+ handleWindowResize() {
+   // Update layout based on new dimensions
+   const width = window.innerWidth;
+   
+   if (width < 500) {
+     document.body.classList.add('mobile');
+   } else {
+     document.body.classList.remove('mobile');
+   }
+ }
+
+ // Method to handle connection status
+ updateConnectionStatus(isOnline) {
+   if (!isOnline) {
+     this.showToast('You are offline. Some features may not work.', 'warning');
+   }
+ }
+
+ // Method to cleanup resources
+ cleanup() {
+   // Clear any pending timers
+   if (this.searchDebounceTimer) {
+     clearTimeout(this.searchDebounceTimer);
+   }
+   
+   // Clear any active toasts
+   this.activeToasts.clear();
+ }
 }
+
+// Enhanced error handling
+window.addEventListener('error', (event) => {
+ console.error('Global error:', event.error);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+ console.error('Unhandled promise rejection:', event.reason);
+});
 
 // Initialize popup when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
- new PopupController();
+ try {
+   new PopupController();
+ } catch (error) {
+   console.error('Failed to initialize popup:', error);
+   
+   // Show basic error message if initialization fails
+   document.body.innerHTML = `
+     <div style="padding: 20px; text-align: center; color: #dc2626;">
+       <h3>🚫 Initialization Error</h3>
+       <p>Failed to load the extension. Please try:</p>
+       <ul style="text-align: left; max-width: 300px; margin: 16px auto;">
+         <li>Refreshing the extension</li>
+         <li>Restarting your browser</li>
+         <li>Reinstalling the extension</li>
+       </ul>
+       <button onclick="window.location.reload()" 
+               style="padding: 8px 16px; margin-top: 16px; border: none; 
+                      border-radius: 6px; background: #667eea; color: white; 
+                      cursor: pointer;">
+         Retry
+       </button>
+     </div>
+   `;
+ }
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', () => {
+ if (!document.hidden) {
+   // Page is visible again, refresh status
+   const controller = window.popupController;
+   if (controller && !controller.isChecking) {
+     controller.updateStatus();
+   }
+ }
+});
+
+// Handle window resize
+window.addEventListener('resize', () => {
+ const controller = window.popupController;
+ if (controller) {
+   controller.handleWindowResize();
+ }
+});
+
+// Handle online/offline status
+window.addEventListener('online', () => {
+ const controller = window.popupController;
+ if (controller) {
+   controller.updateConnectionStatus(true);
+ }
+});
+
+window.addEventListener('offline', () => {
+ const controller = window.popupController;
+ if (controller) {
+   controller.updateConnectionStatus(false);
+ }
+});
+
+// Expose controller instance for debugging
+window.addEventListener('load', () => {
+ setTimeout(() => {
+   if (window.popupController) {
+     window.popupController = window.popupController;
+   }
+ }, 100);
 });

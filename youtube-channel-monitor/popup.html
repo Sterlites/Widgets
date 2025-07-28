@@ -1,136 +1,188 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="YouTube Channel Monitor - Privacy-focused video tracking">
   <link rel="stylesheet" href="popup.css">
+  <title>YouTube Channel Monitor</title>
 </head>
-<body>
-  <div class="header">
-    <h2>
-      <span class="header-icon">📺</span>
-      YouTube Channel Monitor
-    </h2>
-    <div class="status" id="status">
-      <div class="status-indicator" id="statusIndicator"></div>
-      <span id="statusText">Initializing...</span>
+<body class="view-list">
+  <!-- Header with Status -->
+  <header class="header" role="banner">
+    <div class="header-content">
+      <h1 class="header-title">
+        <span class="header-icon" aria-hidden="true">📺</span>
+        <span>YouTube Channel Monitor</span>
+      </h1>
+      <div class="status" id="status" role="status" aria-live="polite">
+        <div class="status-indicator" id="statusIndicator" aria-hidden="true"></div>
+        <span id="statusText">Initializing...</span>
+      </div>
     </div>
-  </div>
+    <div class="header-progress" id="headerProgress" role="progressbar" aria-hidden="true">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </header>
 
   <!-- Quick Action Bar -->
-  <div class="quick-actions">
-    <button id="checkNow" class="btn-primary btn-quick">
-      <span class="btn-icon" id="checkNowIcon">🔄</span>
+  <section class="quick-actions" role="toolbar" aria-label="Quick actions">
+    <button id="checkNow" class="btn-primary btn-quick" aria-describedby="checkNowTooltip">
+      <span class="btn-icon" id="checkNowIcon" aria-hidden="true">🔄</span>
       <span id="checkNowText">Check Now</span>
     </button>
-    <div class="quick-stats" id="quickStats">
-      <span class="quick-stat">
-        <span class="stat-number" id="quickNewCount">0</span>
+    <div class="quick-stats" id="quickStats" role="group" aria-label="Quick statistics">
+      <div class="quick-stat">
+        <span class="stat-number" id="quickNewCount" aria-label="New videos">0</span>
         <span class="stat-label">New</span>
-      </span>
-      <span class="quick-stat">
-        <span class="stat-number" id="quickChannelCount">0</span>
+      </div>
+      <div class="quick-stat">
+        <span class="stat-number" id="quickChannelCount" aria-label="Total channels">0</span>
         <span class="stat-label">Channels</span>
-      </span>
+      </div>
+      <div class="quick-stat">
+        <span class="stat-number" id="quickStatusCount" aria-label="Active channels">0</span>
+        <span class="stat-label">Active</span>
+      </div>
     </div>
-  </div>
+  </section>
 
   <!-- Settings Section -->
-  <div class="section settings-section">
-    <div class="collapsible-header" data-target="settings">
-      <h3>
-        <span class="section-icon">⚙️</span>
+  <section class="section settings-section" role="region" aria-labelledby="settingsHeader">
+    <header class="collapsible-header" data-target="settings" role="button" tabindex="0" aria-expanded="false" aria-controls="settings">
+      <h2 id="settingsHeader" class="section-title">
+        <span class="section-icon" aria-hidden="true">⚙️</span>
         Settings
-      </h3>
-      <span class="collapse-icon">▼</span>
-    </div>
-    <div class="collapsible-content" id="settings">
+      </h2>
+      <span class="collapse-icon" aria-hidden="true">▶</span>
+    </header>
+    <div class="collapsible-content collapsed" id="settings" role="region" aria-labelledby="settingsHeader">
       <div class="settings-grid">
-        <div class="setting-row">
-          <label for="checkInterval">
-            <span class="setting-icon">⏰</span>
-            Check Interval:
-          </label>
-          <select id="checkInterval">
-            <option value="5">5 minutes</option>
-            <option value="15">15 minutes</option>
-            <option value="30">30 minutes</option>
-            <option value="60">1 hour</option>
-            <option value="180">3 hours</option>
-            <option value="360">6 hours</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <label for="timeFilter">
-            <span class="setting-icon">📅</span>
-            Show videos from:
-          </label>
-          <select id="timeFilter">
-            <option value="1hour">Last hour</option>
-            <option value="1day">Last 24 hours</option>
-            <option value="1week">Last week</option>
-            <option value="1month">Last month</option>
-            <option value="1year">Last year</option>
-            <option value="lastcheck">Since last manual check</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <label for="notifications">
-            <span class="setting-icon">🔔</span>
-            Desktop Notifications:
-          </label>
-          <div class="toggle-switch">
-            <input type="checkbox" id="notifications" class="toggle-input">
-            <label for="notifications" class="toggle-label"></label>
+        <div class="setting-group">
+          <h3 class="setting-group-title">Monitoring</h3>
+          <div class="setting-row">
+            <label for="checkInterval" class="setting-label">
+              <span class="setting-icon" aria-hidden="true">⏰</span>
+              <span class="setting-text">
+                <span class="setting-title">Check Interval</span>
+                <span class="setting-description">How often to check for new videos</span>
+              </span>
+            </label>
+            <select id="checkInterval" class="setting-control" aria-describedby="checkIntervalDesc">
+              <option value="5">5 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="180">3 hours</option>
+              <option value="360">6 hours</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="timeFilter" class="setting-label">
+              <span class="setting-icon" aria-hidden="true">📅</span>
+              <span class="setting-text">
+                <span class="setting-title">Time Filter</span>
+                <span class="setting-description">Show videos published within</span>
+              </span>
+            </label>
+            <select id="timeFilter" class="setting-control" aria-describedby="timeFilterDesc">
+              <option value="1hour">Last hour</option>
+              <option value="1day">Last 24 hours</option>
+              <option value="1week">Last week</option>
+              <option value="1month">Last month</option>
+              <option value="1year">Last year</option>
+              <option value="lastcheck">Since last manual check</option>
+            </select>
           </div>
         </div>
-        <div class="setting-row">
-          <label for="autoOpen">
-            <span class="setting-icon">🔗</span>
-            Open videos in:
-          </label>
-          <select id="autoOpen">
-            <option value="current">Current tab</option>
-            <option value="new">New tab</option>
-            <option value="background">Background tab</option>
-          </select>
+
+        <div class="setting-group">
+          <h3 class="setting-group-title">Experience</h3>
+          <div class="setting-row">
+            <label for="notifications" class="setting-label">
+              <span class="setting-icon" aria-hidden="true">🔔</span>
+              <span class="setting-text">
+                <span class="setting-title">Desktop Notifications</span>
+                <span class="setting-description">Get notified when new videos are found</span>
+              </span>
+            </label>
+            <div class="toggle-switch" role="switch" aria-checked="false" tabindex="0">
+              <input type="checkbox" id="notifications" class="toggle-input" aria-describedby="notificationsDesc">
+              <label for="notifications" class="toggle-label" aria-hidden="true"></label>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label for="autoOpen" class="setting-label">
+              <span class="setting-icon" aria-hidden="true">🔗</span>
+              <span class="setting-text">
+                <span class="setting-title">Open Videos In</span>
+                <span class="setting-description">How to open video links</span>
+              </span>
+            </label>
+            <select id="autoOpen" class="setting-control">
+              <option value="current">Current tab</option>
+              <option value="new">New tab</option>
+              <option value="background">Background tab</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="darkMode" class="setting-label">
+              <span class="setting-icon" aria-hidden="true">🌙</span>
+              <span class="setting-text">
+                <span class="setting-title">Dark Mode</span>
+                <span class="setting-description">Use dark theme interface</span>
+              </span>
+            </label>
+            <div class="toggle-switch" role="switch" aria-checked="false" tabindex="0">
+              <input type="checkbox" id="darkMode" class="toggle-input">
+              <label for="darkMode" class="toggle-label" aria-hidden="true"></label>
+            </div>
+          </div>
         </div>
       </div>
       <div class="button-row">
-        <button id="clearData" class="btn-secondary">
-          <span class="btn-icon">🗑️</span>
+        <button id="clearData" class="btn-secondary" aria-describedby="clearDataTooltip">
+          <span class="btn-icon" aria-hidden="true">🗑️</span>
           Clear Data
         </button>
-        <button id="exportData" class="btn-secondary">
-          <span class="btn-icon">💾</span>
+        <button id="exportData" class="btn-secondary" aria-describedby="exportDataTooltip">
+          <span class="btn-icon" aria-hidden="true">💾</span>
           Export
+        </button>
+        <button id="importData" class="btn-secondary" aria-describedby="importDataTooltip">
+          <span class="btn-icon" aria-hidden="true">📁</span>
+          Import
         </button>
       </div>
     </div>
-  </div>
+  </section>
 
   <!-- Results Section -->
-  <div class="section results-section">
-    <div class="section-header">
-      <h3>
-        <span class="section-icon">📊</span>
-        Channel Status
-        <span class="loading-spinner" id="loadingSpinner"></span>
-      </h3>
-      <div class="controls">
-        <div class="view-controls">
-          <button id="gridView" class="btn-view active" title="Grid View">
-            <span class="btn-icon">⊞</span>
+  <main class="section results-section" role="main" aria-labelledby="resultsHeader">
+    <header class="section-header">
+      <h2 id="resultsHeader" class="section-title">
+        <span class="section-icon" aria-hidden="true">📊</span>
+        Channel Activity
+        <span class="loading-spinner" id="loadingSpinner" aria-hidden="true"></span>
+      </h2>
+      <div class="controls" role="group" aria-label="View and sort controls">
+        <div class="view-controls" role="radiogroup" aria-label="View mode">
+          <button id="listView" class="btn-view active" title="List View" aria-pressed="true">
+            <span class="btn-icon" aria-hidden="true">☰</span>
+            <span class="sr-only">List</span>
           </button>
-          <button id="listView" class="btn-view" title="List View">
-            <span class="btn-icon">☰</span>
+          <button id="gridView" class="btn-view" title="Grid View" aria-pressed="false">
+            <span class="btn-icon" aria-hidden="true">⊞</span>
+            <span class="sr-only">Grid</span>
           </button>
-          <button id="compactView" class="btn-view" title="Compact View">
-            <span class="btn-icon">▤</span>
+          <button id="compactView" class="btn-view" title="Compact View" aria-pressed="false">
+            <span class="btn-icon" aria-hidden="true">▤</span>
+            <span class="sr-only">Compact</span>
           </button>
         </div>
         <div class="sort-controls">
-          <select id="sortBy">
+          <label for="sortBy" class="sr-only">Sort channels by</label>
+          <select id="sortBy" class="sort-select" aria-label="Sort channels by">
             <option value="name">Channel Name</option>
             <option value="new">New Videos</option>
             <option value="filtered">Videos in Timeframe</option>
@@ -138,110 +190,136 @@
           </select>
         </div>
         <div class="expand-controls">
-          <button id="expandAll" class="btn-mini">Expand All</button>
-          <button id="collapseAll" class="btn-mini">Collapse All</button>
+          <button id="expandAll" class="btn-mini" aria-label="Expand all channels">Expand All</button>
+          <button id="collapseAll" class="btn-mini" aria-label="Collapse all channels">Collapse All</button>
         </div>
       </div>
-    </div>
+    </header>
     
     <!-- Filter Info -->
-    <div class="filter-info" id="filterInfo">
+    <div class="filter-info" id="filterInfo" role="region" aria-label="Filter information">
       <div class="time-filter-display" id="timeFilterInfo">
         Showing videos from: Last 24 hours
       </div>
       <div class="search-container">
-        <input type="text" id="searchChannels" placeholder="Search channels..." class="search-input">
-        <button id="clearSearch" class="search-clear" title="Clear search">×</button>
+        <label for="searchChannels" class="sr-only">Search channels</label>
+        <input type="search" id="searchChannels" placeholder="Search channels..." class="search-input" aria-describedby="searchHelp">
+        <button id="clearSearch" class="search-clear" title="Clear search" aria-label="Clear search">
+          <span aria-hidden="true">×</span>
+        </button>
       </div>
     </div>
     
     <!-- Summary Stats -->
-    <div class="summary-stats" id="summaryStats">
+    <div class="summary-stats" id="summaryStats" role="region" aria-label="Channel statistics">
       <div class="stat-item">
-        <span class="stat-number">0</span>
+        <span class="stat-number" aria-label="Total channels monitored">0</span>
         <span class="stat-label">Channels</span>
       </div>
       <div class="stat-item">
-        <span class="stat-number">0</span>
+        <span class="stat-number" aria-label="New videos found">0</span>
         <span class="stat-label">New Videos</span>
       </div>
       <div class="stat-item">
-        <span class="stat-number">0</span>
+        <span class="stat-number" aria-label="Videos in current timeframe">0</span>
         <span class="stat-label">In Timeframe</span>
       </div>
       <div class="stat-item">
-        <span class="stat-number">0</span>
+        <span class="stat-number" aria-label="Total videos across all channels">0</span>
         <span class="stat-label">Total Videos</span>
       </div>
     </div>
 
     <!-- Channel Results -->
-    <div id="channelResults" class="channel-results">
+    <div id="channelResults" class="channel-results" role="region" aria-label="Channel results" aria-live="polite">
       <div class="loading">
-        <div class="loading-animation"></div>
+        <div class="loading-animation" aria-hidden="true"></div>
         <span>Loading channels...</span>
       </div>
     </div>
-  </div>
+  </main>
 
   <!-- Instructions Section -->
-  <div class="section instructions-section">
-    <div class="collapsible-header" data-target="instructions">
-      <h3>
-        <span class="section-icon">📋</span>
+  <section class="section instructions-section" role="region" aria-labelledby="instructionsHeader">
+    <header class="collapsible-header" data-target="instructions" role="button" tabindex="0" aria-expanded="false" aria-controls="instructions">
+      <h2 id="instructionsHeader" class="section-title">
+        <span class="section-icon" aria-hidden="true">📋</span>
         Quick Start Guide
-      </h3>
-      <span class="collapse-icon">▶</span>
-    </div>
-    <div class="collapsible-content collapsed" id="instructions">
+      </h2>
+      <span class="collapse-icon" aria-hidden="true">▶</span>
+    </header>
+    <div class="collapsible-content collapsed" id="instructions" role="region" aria-labelledby="instructionsHeader">
       <div class="instructions">
         <div class="instruction-item">
-          <span class="instruction-number">1</span>
+          <span class="instruction-number" aria-hidden="true">1</span>
           <div class="instruction-content">
-            <span class="instruction-text">Create a bookmarks folder named "Vid"</span>
-            <span class="instruction-detail">Right-click bookmarks bar → Add folder → Name it "Vid"</span>
+            <h3 class="instruction-title">Create a "Vid" Bookmarks Folder</h3>
+            <p class="instruction-detail">Right-click your bookmarks bar, select "Add folder", and name it exactly "Vid"</p>
           </div>
         </div>
         <div class="instruction-item">
-          <span class="instruction-number">2</span>
+          <span class="instruction-number" aria-hidden="true">2</span>
           <div class="instruction-content">
-            <span class="instruction-text">Add YouTube channel pages to this folder</span>
-            <span class="instruction-detail">Visit youtube.com/@channelname/videos and bookmark to "Vid" folder</span>
+            <h3 class="instruction-title">Add YouTube Channel Pages</h3>
+            <p class="instruction-detail">Visit youtube.com/@channelname/videos and bookmark each channel to your "Vid" folder</p>
           </div>
         </div>
         <div class="instruction-item">
-          <span class="instruction-number">3</span>
+          <span class="instruction-number" aria-hidden="true">3</span>
           <div class="instruction-content">
-            <span class="instruction-text">Configure your preferences</span>
-            <span class="instruction-detail">Set check interval, time filter, and notification preferences</span>
+            <h3 class="instruction-title">Configure Your Preferences</h3>
+            <p class="instruction-detail">Set your check interval, time filter, and notification preferences above</p>
           </div>
         </div>
         <div class="instruction-item">
-          <span class="instruction-number">4</span>
+          <span class="instruction-number" aria-hidden="true">4</span>
           <div class="instruction-content">
-            <span class="instruction-text">Click "Check Now" to start monitoring</span>
-            <span class="instruction-detail">Extension will automatically check for new videos based on your interval</span>
+            <h3 class="instruction-title">Start Monitoring</h3>
+            <p class="instruction-detail">Click "Check Now" to begin. The extension will automatically check for new videos</p>
           </div>
         </div>
       </div>
+      <div class="help-links">
+        <a href="#" id="helpLink" class="help-link">
+          <span class="btn-icon" aria-hidden="true">❓</span>
+          Need Help?
+        </a>
+        <a href="#" id="feedbackLink" class="help-link">
+          <span class="btn-icon" aria-hidden="true">💬</span>
+          Send Feedback
+        </a>
+      </div>
     </div>
-  </div>
+  </section>
 
-  <!-- Resize Handle and Status Bar -->
-  <div class="footer">
+  <!-- Footer with Status Bar -->
+  <footer class="footer" role="contentinfo">
     <div class="footer-info">
-      <span id="lastUpdate">Never updated</span>
-      <button id="refreshData" class="btn-icon-only" title="Refresh">
-        <span class="btn-icon">↻</span>
+      <span id="lastUpdate" class="last-update">Never updated</span>
+      <button id="refreshData" class="btn-icon-only" title="Refresh data" aria-label="Refresh data">
+        <span class="btn-icon" aria-hidden="true">↻</span>
       </button>
     </div>
-    <div class="resize-handle" id="resizeHandle" title="Drag to resize"></div>
-  </div>
+    <div class="footer-actions">
+      <span class="version-info">v1.1.0</span>
+      <div class="resize-handle" id="resizeHandle" title="Drag to resize" aria-label="Resize window"></div>
+    </div>
+  </footer>
 
   <!-- Keyboard Shortcuts Hint -->
-  <div class="keyboard-hints" id="keyboardHints">
-    <span>Press <kbd>R</kbd> to refresh • <kbd>S</kbd> to search • <kbd>Esc</kbd> to clear</span>
+  <div class="keyboard-hints" id="keyboardHints" role="tooltip">
+    <div class="keyboard-shortcuts">
+      <span>Press <kbd>R</kbd> to refresh</span>
+      <span><kbd>S</kbd> to search</span>
+      <span><kbd>Esc</kbd> to clear</span>
+    </div>
   </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container" role="region" aria-live="assertive" aria-label="Notifications"></div>
+
+  <!-- Tooltips -->
+  <div id="tooltipContainer" class="tooltip-container" role="tooltip"></div>
 
   <script src="popup.js"></script>
 </body>
