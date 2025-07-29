@@ -1,14 +1,14 @@
 class PopupController {
-  constructor() {
-    this.settings = {};
-    this.channelResults = [];
-    this.filteredResults = [];
-    this.searchQuery = '';
-    this.sortBy = 'name';
-    this.timeFilter = '1day';
-    this.isChecking = false;
-    this.init();
-  }
+constructor() {
+  this.settings = {};
+  this.channelResults = [];
+  this.filteredResults = [];
+  this.searchQuery = '';
+  this.sortBy = 'activity'; // Changed from 'name' to 'activity'
+  this.timeFilter = '1day'; // This remains the same (Last 24 hours)
+  this.isChecking = false;
+  this.init();
+}
 
   async init() {
     try {
@@ -24,21 +24,22 @@ class PopupController {
     }
   }
 
-  async loadSettings() {
-    const result = await chrome.storage.local.get(['checkInterval', 'timeFilter', 'notifications', 'autoOpen']);
-    this.settings = {
-      checkInterval: result.checkInterval || 15,
-      notifications: result.notifications || false,
-      autoOpen: result.autoOpen || 'current'
-    };
+async loadSettings() {
+  const result = await chrome.storage.local.get(['checkInterval', 'timeFilter', 'notifications', 'autoOpen']);
+  this.settings = {
+    checkInterval: result.checkInterval || 15,
+    notifications: result.notifications || false,
+    autoOpen: result.autoOpen || 'current'
+  };
 
-    // Set timeFilter from storage or default
-    this.timeFilter = result.timeFilter || '1day';
+  // Set timeFilter from storage or default
+  this.timeFilter = result.timeFilter || '1day';
 
-    document.getElementById('checkInterval').value = this.settings.checkInterval;
-    document.getElementById('timeFilter').value = this.timeFilter;
-    document.getElementById('notifications').checked = this.settings.notifications;
-  }
+  document.getElementById('checkInterval').value = this.settings.checkInterval;
+  document.getElementById('timeFilter').value = this.timeFilter;
+  document.getElementById('sortBy').value = 'activity'; // Set default sort to Activity
+  document.getElementById('notifications').checked = this.settings.notifications;
+}
 
   async saveSettings() {
     await chrome.storage.local.set(this.settings);
