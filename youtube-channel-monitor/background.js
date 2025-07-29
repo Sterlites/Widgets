@@ -277,7 +277,8 @@ class YouTubeChannelMonitor {
             channelUrl: bookmark.url,
             error: error.message,
             newVideos: [],
-            filteredVideos: []
+            filteredVideos: [],
+            totalVideos: []
           });
         }
         
@@ -331,7 +332,7 @@ class YouTubeChannelMonitor {
       channelUrl: bookmark.url,
       newVideos,
       filteredVideos,
-      totalVideos: currentVideos.length
+      totalVideos: currentVideos // Store all videos for popup filtering
     };
   }
 

@@ -5,6 +5,7 @@ class PopupController {
     this.filteredResults = [];
     this.searchQuery = '';
     this.sortBy = 'name';
+    this.timeFilter = '1day';
     this.isChecking = false;
     this.init();
   }
@@ -15,6 +16,7 @@ class PopupController {
       await this.loadChannelResults();
       this.setupEventListeners();
       this.updateStatus();
+      this.applyFilters();
       this.updateUI();
     } catch (error) {
       console.error('Initialization failed:', error);
@@ -26,13 +28,15 @@ class PopupController {
     const result = await chrome.storage.local.get(['checkInterval', 'timeFilter', 'notifications', 'autoOpen']);
     this.settings = {
       checkInterval: result.checkInterval || 15,
-      timeFilter: result.timeFilter || '1day',
       notifications: result.notifications || false,
       autoOpen: result.autoOpen || 'current'
     };
 
+    // Set timeFilter from storage or default
+    this.timeFilter = result.timeFilter || '1day';
+
     document.getElementById('checkInterval').value = this.settings.checkInterval;
-    document.getElementById('timeFilter').value = this.settings.timeFilter;
+    document.getElementById('timeFilter').value = this.timeFilter;
     document.getElementById('notifications').checked = this.settings.notifications;
   }
 
@@ -40,28 +44,34 @@ class PopupController {
     await chrome.storage.local.set(this.settings);
   }
 
+  async saveTimeFilter() {
+    await chrome.storage.local.set({ timeFilter: this.timeFilter });
+  }
+
   async loadChannelResults() {
     const result = await chrome.storage.local.get(['channelResults']);
     this.channelResults = result.channelResults || [];
-    this.filteredResults = [...this.channelResults];
   }
 
   setupEventListeners() {
     document.getElementById('checkNow').addEventListener('click', () => this.checkNow());
+    document.getElementById('timeFilter').addEventListener('change', (e) => {
+      this.timeFilter = e.target.value;
+      this.saveTimeFilter();
+      this.applyFilters();
+      this.updateUI();
+    });
     document.getElementById('sortBy').addEventListener('change', (e) => {
       this.sortBy = e.target.value;
       this.updateChannelDisplay();
     });
     document.getElementById('search').addEventListener('input', (e) => {
       this.searchQuery = e.target.value.toLowerCase();
-      this.filterChannels();
+      this.applyFilters();
+      this.updateUI();
     });
     document.getElementById('checkInterval').addEventListener('change', (e) => {
       this.settings.checkInterval = parseInt(e.target.value);
-      this.saveSettings();
-    });
-    document.getElementById('timeFilter').addEventListener('change', (e) => {
-      this.settings.timeFilter = e.target.value;
       this.saveSettings();
     });
     document.getElementById('notifications').addEventListener('change', (e) => {
@@ -69,6 +79,50 @@ class PopupController {
       this.saveSettings();
     });
     document.getElementById('clearData').addEventListener('click', () => this.clearData());
+  }
+
+  getTimeFilterTimestamp() {
+    const now = Date.now();
+    const timeMap = {
+      '1hour': 3600000,    // 1 hour in milliseconds
+      '1day': 86400000,    // 24 hours in milliseconds
+      '1week': 604800000,  // 1 week in milliseconds
+      '1month': 2592000000 // 30 days in milliseconds
+    };
+    
+    return now - (timeMap[this.timeFilter] || timeMap['1day']);
+  }
+
+  applyFilters() {
+    const filterTimestamp = this.getTimeFilterTimestamp();
+    
+    // Apply time filter and search filter
+    this.filteredResults = this.channelResults.map(channel => {
+      if (channel.error) {
+        return channel; // Keep error channels as-is
+      }
+
+      // Get all videos from the channel (stored videos, not just new ones)
+      const allVideos = channel.totalVideos || [];
+      
+      // Apply time filter
+      const timeFilteredVideos = allVideos.filter(video => 
+        video.publishedTimestamp >= filterTimestamp
+      );
+
+      // Apply search filter on channel name
+      const matchesSearch = !this.searchQuery || 
+        channel.channelTitle.toLowerCase().includes(this.searchQuery);
+
+      if (!matchesSearch) {
+        return null; // Exclude this channel from results
+      }
+
+      return {
+        ...channel,
+        filteredVideos: timeFilteredVideos
+      };
+    }).filter(channel => channel !== null); // Remove null entries
   }
 
   async checkNow() {
@@ -79,6 +133,7 @@ class PopupController {
     try {
       await chrome.runtime.sendMessage({ action: 'checkNow' });
       await this.loadChannelResults();
+      this.applyFilters();
       this.updateUI();
       this.showToast('Check completed');
     } catch (error) {
@@ -96,19 +151,13 @@ class PopupController {
     try {
       await chrome.runtime.sendMessage({ action: 'clearCache' });
       await this.loadChannelResults();
+      this.applyFilters();
       this.updateUI();
       this.showToast('Data cleared successfully');
     } catch (error) {
       console.error('Clear failed:', error);
       this.showError('Failed to clear data');
     }
-  }
-
-  filterChannels() {
-    this.filteredResults = this.searchQuery ? 
-      this.channelResults.filter(ch => ch.channelTitle.toLowerCase().includes(this.searchQuery)) :
-      [...this.channelResults];
-    this.updateChannelDisplay();
   }
 
   sortChannels(channels) {
@@ -229,9 +278,9 @@ class PopupController {
   }
 
   updateStats() {
-    const totalChannels = this.channelResults.length;
-    const totalNew = this.channelResults.reduce((sum, ch) => sum + (ch.newVideos?.length || 0), 0);
-    const totalVideos = this.channelResults.reduce((sum, ch) => sum + (ch.filteredVideos?.length || 0), 0);
+    const totalChannels = this.filteredResults.length;
+    const totalNew = this.filteredResults.reduce((sum, ch) => sum + (ch.newVideos?.length || 0), 0);
+    const totalVideos = this.filteredResults.reduce((sum, ch) => sum + (ch.filteredVideos?.length || 0), 0);
     
     document.getElementById('channelCount').textContent = totalChannels;
     document.getElementById('newCount').textContent = totalNew;
@@ -326,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.channelResults && window.popupController) {
     window.popupController.loadChannelResults().then(() => {
+      window.popupController.applyFilters();
       window.popupController.updateUI();
     });
   }
