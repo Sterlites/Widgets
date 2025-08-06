@@ -66,6 +66,11 @@ async loadSettings() {
       this.sortBy = e.target.value;
       this.updateChannelDisplay();
     });
+    document.getElementById('showFilter').addEventListener('change', (e) => {
+      this.showFilter = e.target.value;
+      this.applyFilters();
+      this.updateUI();
+    });
     document.getElementById('search').addEventListener('input', (e) => {
       this.searchQuery = e.target.value.toLowerCase();
       this.applyFilters();
@@ -167,7 +172,13 @@ async loadSettings() {
       if (!a.error && b.error) return -1;
       
       switch (this.sortBy) {
-        case 'new': return (b.newVideos?.length || 0) - (a.newVideos?.length || 0);
+        case 'new': 
+          // Use appropriate new count based on time filter
+          const aNewCount = this.timeFilter === 'sincelastvisit' ? 
+            (a.trulyNewVideos?.length || 0) : (a.newVideos?.length || 0);
+          const bNewCount = this.timeFilter === 'sincelastvisit' ? 
+            (b.trulyNewVideos?.length || 0) : (b.newVideos?.length || 0);
+          return bNewCount - aNewCount;
         case 'activity':
           const aTime = Math.max(...(a.filteredVideos?.map(v => v.publishedTimestamp) || [0]));
           const bTime = Math.max(...(b.filteredVideos?.map(v => v.publishedTimestamp) || [0]));
@@ -202,30 +213,45 @@ async loadSettings() {
         </div>`;
     }
 
-    const newCount = channel.newVideos?.length || 0;
+    const originalNewCount = channel.newVideos?.length || 0;
+    const trulyNewCount = channel.trulyNewVideos?.length || 0;
     const filteredCount = channel.filteredVideos?.length || 0;
     const hasVideos = filteredCount > 0;
+
+    // Determine which "new" count to show based on time filter
+    const displayNewCount = this.timeFilter === 'sincelastvisit' ? trulyNewCount : originalNewCount;
 
     return `
       <div class="channel ${!hasVideos ? 'collapsed' : ''}" data-index="${index}">
         <div class="channel-header" data-toggle="${index}">
           <div class="channel-title">${this.escapeHtml(channel.channelTitle)}</div>
           <div class="channel-stats">
-            ${newCount > 0 ? `<span class="badge new">${newCount} new</span>` : ''}
+            ${displayNewCount > 0 ? `<span class="badge new" title="${this.timeFilter === 'sincelastvisit' ? 'New since last visit' : 'New since last check'}">${displayNewCount} new</span>` : ''}
             <span class="badge normal">${filteredCount} videos</span>
           </div>
         </div>
-        ${hasVideos ? `<div class="videos">${this.generateVideosHtml(channel.filteredVideos, channel.newVideos)}</div>` : ''}
+        ${hasVideos ? `<div class="videos">${this.generateVideosHtml(channel.filteredVideos, channel.newVideos, channel.trulyNewVideos)}</div>` : ''}
       </div>`;
   }
 
-  generateVideosHtml(videos, newVideos) {
+  generateVideosHtml(videos, newVideos, trulyNewVideos) {
     const newVideoIds = new Set((newVideos || []).map(v => v.id));
-    return videos.map(v => `
-      <div class="video ${newVideoIds.has(v.id) ? 'new' : ''}" data-url="${v.url}">
-        <div class="video-title">${this.escapeHtml(v.title)}</div>
-        <div class="video-published">${this.escapeHtml(v.published)}</div>
-      </div>`).join('');
+    const trulyNewVideoIds = new Set((trulyNewVideos || []).map(v => v.id));
+    
+    return videos.map(v => {
+      // Determine if video should be marked as new based on current context
+      const isNew = this.timeFilter === 'sincelastvisit' ? 
+        trulyNewVideoIds.has(v.id) : newVideoIds.has(v.id);
+      
+      const newTitle = this.timeFilter === 'sincelastvisit' && trulyNewVideoIds.has(v.id) ? 
+        'New since your last visit' : 'New since last check';
+        
+      return `
+        <div class="video ${isNew ? 'new' : ''}" data-url="${v.url}" ${isNew ? `title="${newTitle}"` : ''}>
+          <div class="video-title">${this.escapeHtml(v.title)}</div>
+          <div class="video-published">${this.escapeHtml(v.published)}</div>
+        </div>`;
+    }).join('');
   }
 
   setupChannelEventListeners() {
