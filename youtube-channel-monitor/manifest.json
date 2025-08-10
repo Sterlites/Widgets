@@ -1,27 +1,62 @@
 {
   "manifest_version": 3,
   "name": "YouTube Channel Monitor",
-  "version": "1.1.4",
-  "description": "Monitor YouTube channels for new videos",
-  "permissions": ["bookmarks", "storage", "alarms", "tabs", "notifications"],
-  "host_permissions": ["https://www.youtube.com/*"],
+  "version": "1.2.0",
+  "description": "Monitor YouTube channels for new videos with enhanced features and improved UX",
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "alarms",
+    "tabs",
+    "notifications",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "YouTube Channel Monitor"
+    "default_title": "YouTube Channel Monitor - Check for new videos",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
   },
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "commands": {
     "check-now": {
-      "suggested_key": { "default": "Ctrl+Shift+Y" },
+      "suggested_key": { 
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y" 
+      },
       "description": "Check for new videos now"
+    },
+    "toggle-popup": {
+      "suggested_key": { 
+        "default": "Alt+Shift+Y",
+        "mac": "Alt+Shift+Y" 
+      },
+      "description": "Open YouTube Channel Monitor popup"
     }
-  }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
