@@ -14,34 +14,44 @@
     </div>
   </header>
 
-  <div class="controls">
-    <button id="checkNow" class="btn primary">Check Now</button>
-    <select id="timeFilter">
+  <div class="controls" role="toolbar" aria-label="Main controls">
+    <div class="tab-bar" role="tablist" aria-label="View tabs">
+      <button id="tabChannels" class="tab active" role="tab" aria-selected="true" aria-controls="results">Channels</button>
+      <button id="tabWatchLater" class="tab" role="tab" aria-selected="false" aria-controls="results">Watch Later</button>
+    </div>
+
+    <button id="checkNow" class="btn primary" title="Check channels now">Check Now</button>
+
+    <select id="timeFilter" aria-label="Time filter">
       <option value="1hour">Last 1 hour</option>
       <option value="1day">Last 24 hours</option>
       <option value="1week">Last week</option>
       <option value="1month">Last month</option>
       <option value="sincelastvisit">Since last visit</option>
     </select>
-    <select id="sortBy">
+
+    <select id="sortBy" aria-label="Sort channels">
       <option value="name">Name</option>
       <option value="new">New Videos</option>
       <option value="activity">Activity</option>
     </select>
-    <select id="showFilter">
+
+    <select id="showFilter" aria-label="Show filter">
       <option value="all">All Channels</option>
       <option value="newonly">New Videos Only</option>
     </select>
-    <input type="search" id="search" placeholder="Search channels...">
+
+    <input type="search" id="search" placeholder="Search channels..." aria-label="Search channels">
   </div>
 
-  <div class="stats" id="stats">
+  <div class="stats" id="stats" aria-live="polite">
     <span>Channels: <strong id="channelCount">0</strong></span>
     <span>New: <strong id="newCount">0</strong></span>
     <span>Total: <strong id="totalCount">0</strong></span>
+    <span>Watch Later: <strong id="watchLaterCount">0</strong></span>
   </div>
 
-  <main id="results" class="results">
+  <main id="results" class="results" tabindex="0" aria-live="polite">
     <div class="loading">Loading...</div>
   </main>
 

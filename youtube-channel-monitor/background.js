@@ -165,13 +165,17 @@ class YouTubeChannelMonitor {
       
       if (!videoId || !publishedText) return null;
       
+      // thumbnail extraction (optional)
+      const thumbnail = videoRenderer.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+
       return {
         id: videoId,
         title: title.trim(),
         url: `https://www.youtube.com/watch?v=${videoId}`,
         published: publishedText,
         publishedTimestamp: this.parsePublishedTime(publishedText),
-        discoveredAt: Date.now()
+        discoveredAt: Date.now(),
+        thumbnail
       };
     } catch { 
       return null; 
@@ -343,6 +347,61 @@ class YouTubeChannelMonitor {
       lastResultsUpdate: Date.now()
     });
   }
+
+  /* ---------------------------
+     Watch Later: storage helpers
+     --------------------------- */
+  async getWatchLaterVideos() {
+    const result = await this.getStorage(['watchLaterVideos']);
+    return result.watchLaterVideos || [];
+  }
+
+  async addToWatchLater(video) {
+    try {
+      if (!video || !video.id || !video.url) throw new Error('Invalid video object');
+      const existing = await this.getWatchLaterVideos();
+
+      if (existing.find(v => v.id === video.id)) {
+        return { success: true, message: 'Already in Watch Later' };
+      }
+
+      const item = {
+        id: video.id,
+        title: video.title || '',
+        url: video.url,
+        channelTitle: video.channelTitle || '',
+        published: video.published || '',
+        addedAt: Date.now(),
+        thumbnail: video.thumbnail || ''
+      };
+
+      // Add to front (most recent first)
+      existing.unshift(item);
+
+      // Keep list size reasonable (cleanup old)
+      const MAX_ITEMS = 500;
+      if (existing.length > MAX_ITEMS) existing.splice(MAX_ITEMS);
+
+      await this.setStorage({ watchLaterVideos: existing });
+      return { success: true, item };
+    } catch (error) {
+      console.error('❌ addToWatchLater failed:', error);
+      throw error;
+    }
+  }
+
+  async removeFromWatchLater(videoId) {
+    try {
+      if (!videoId) throw new Error('Missing videoId');
+      const existing = await this.getWatchLaterVideos();
+      const filtered = existing.filter(v => v.id !== videoId);
+      await this.setStorage({ watchLaterVideos: filtered });
+      return { success: true };
+    } catch (error) {
+      console.error('❌ removeFromWatchLater failed:', error);
+      throw error;
+    }
+  }
 }
 
 const monitor = new YouTubeChannelMonitor();
@@ -369,6 +428,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await new Promise(resolve => chrome.storage.local.remove(cacheKeys, resolve));
       }
       return { success: true };
+    },
+
+    // Watch Later actions
+    async getWatchLater() {
+      const list = await monitor.getWatchLaterVideos();
+      return { success: true, list };
+    },
+
+    async addToWatchLater() {
+      const { video } = message;
+      const result = await monitor.addToWatchLater(video);
+      return result;
+    },
+
+    async removeFromWatchLater() {
+      const { videoId } = message;
+      const result = await monitor.removeFromWatchLater(videoId);
+      return result;
     }
   };
 
@@ -387,7 +464,8 @@ chrome.runtime.onInstalled.addListener((details) => {
       timeFilter: '1day',
       notifications: false,
       autoOpen: 'current',
-      installDate: Date.now()
+      installDate: Date.now(),
+      watchLaterVideos: [] // initialize watch later
     });
   }
 });
