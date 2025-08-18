@@ -13,7 +13,7 @@ class Popup {
     this.cacheDOM();
     this.settings = {}; this.channelResults = []; this.filteredResults = []; this.watchLater = [];
     this.watchedVideos = {}; this.watchLaterMap = new Map(); this.view = 'channels';
-    this.isChecking = false; this.searchDebounce = null; this.updateScheduled = false;
+    this.sortBy = 'activity'; this.isChecking = false; this.searchDebounce = null; this.updateScheduled = false;
     this.init();
   }
 
@@ -25,10 +25,10 @@ class Popup {
       sWl: D.getElementById('s-wl'), sWatched: D.getElementById('s-watched'), stText: D.getElementById('st-text'),
       ind: D.getElementById('ind'), tabCh: D.getElementById('tab-ch'), tabWl: D.getElementById('tab-wl'),
       btnCheck: D.getElementById('btn-check'), fTime: D.getElementById('f-time'), fSort: D.getElementById('f-sort'),
-      fShow: D.getElementById('f-show'), fSearch: D.getElementById('f-search'), fHw: D.getElementById('f-hw'),
+      fSearch: D.getElementById('f-search'), fHw: D.getElementById('f-hw'),
       fHwCb: D.getElementById('f-hw-cb'), btnCw: D.getElementById('btn-cw'), setInt: D.getElementById('set-int'),
       setNotif: D.getElementById('set-notif'), setOpen: D.getElementById('set-open'),
-      controlSet: [D.getElementById('f-time'), D.getElementById('f-sort'), D.getElementById('f-show'), D.getElementById('f-search'), D.getElementById('f-hw'), D.getElementById('btn-cw')]
+      controlSet: [D.getElementById('filter-controls')]
     };
   }
   
@@ -47,11 +47,14 @@ class Popup {
   }
 
   async loadSettings() {
-    const r = await chrome.storage.local.get(['checkInterval', 'timeFilter', 'notifications', 'autoOpen', 'showFilter', 'hideWatched']);
+    const r = await chrome.storage.local.get(['checkInterval', 'timeFilter', 'notifications', 'autoOpen', 'hideWatched']);
     this.settings = { checkInterval: r.checkInterval || 15, notifications: r.notifications || false, autoOpen: r.autoOpen || 'current' };
-    this.timeFilter = r.timeFilter || '1day'; this.showFilter = r.showFilter || 'all'; this.hideWatched = r.hideWatched || false;
-    this.D.setInt.value = this.settings.checkInterval; this.D.fTime.value = this.timeFilter; this.D.fShow.value = this.showFilter;
-    this.D.setNotif.checked = this.settings.notifications; this.D.fHwCb.checked = this.hideWatched; this.D.setOpen.value = this.settings.autoOpen;
+    this.timeFilter = r.timeFilter || '1day'; this.hideWatched = r.hideWatched || false;
+    this.D.setInt.value = this.settings.checkInterval; 
+    this.D.fTime.value = this.timeFilter;
+    this.D.setNotif.checked = this.settings.notifications; 
+    this.D.fHwCb.checked = this.hideWatched; 
+    this.D.setOpen.value = this.settings.autoOpen;
   }
 
   async loadWatchedVideos() { try { const r = await chrome.runtime.sendMessage({ action: 'getWatchedVideos' }); this.watchedVideos = r?.success ? r.watchedVideos : (await chrome.storage.local.get('watchedVideos')).watchedVideos || {}; } catch { this.watchedVideos = (await chrome.storage.local.get('watchedVideos')).watchedVideos || {}; } }
@@ -63,20 +66,29 @@ class Popup {
     D.btnCheck.addEventListener('click', () => this.checkNow());
     D.fTime.addEventListener('change', e => this.handleFilterChange('timeFilter', e.target.value));
     D.fSort.addEventListener('change', e => { this.sortBy = e.target.value; this.updateUI(); });
-    D.fShow.addEventListener('change', e => this.handleFilterChange('showFilter', e.target.value));
     D.fHwCb.addEventListener('change', e => this.handleFilterChange('hideWatched', e.target.checked));
     D.fSearch.addEventListener('input', e => { clearTimeout(this.searchDebounce); this.searchDebounce = setTimeout(() => { this.searchQuery = e.target.value.toLowerCase(); this.updateUI(); }, 150); });
     D.tabCh.addEventListener('click', () => this.switchView('channels'));
     D.tabWl.addEventListener('click', () => this.switchView('watchLater'));
     D.res.addEventListener('click', e => {
-      const vidEl = e.target.closest('.vid'); const wlItem = e.target.closest('.wl-item');
-      if (e.target.closest('.ch-h')) e.currentTarget.querySelector(`[data-ch-id="${e.target.closest('.ch-h').dataset.chId}"]`).classList.toggle('collapsed');
-      else if (e.target.closest('.wl-btn')) this.toggleWatchLater(e.target.closest('.wl-btn'));
-      else if (e.target.closest('.w-btn')) this.toggleWatched(e.target.closest('.w-btn'));
-      else if (vidEl) this.openVideo(vidEl.dataset.url);
-      else if (e.target.closest('.wl-open')) this.openVideo(e.target.closest('.wl-open').dataset.url);
-      else if (e.target.closest('.wl-remove')) this.removeFromWatchLater(e.target.closest('.wl-remove').dataset.id, true);
+      const vidEl = e.target.closest('.vid');
+      const chHeader = e.target.closest('.ch-h');
+      
+      if (chHeader) {
+          chHeader.parentElement.classList.toggle('collapsed');
+      } else if (e.target.closest('.vid-btn.wl')) {
+          this.toggleWatchLater(e.target.closest('.vid-btn.wl'));
+      } else if (e.target.closest('.vid-btn.watched')) {
+          this.toggleWatched(e.target.closest('.vid-btn.watched'));
+      } else if (vidEl) {
+          this.openVideo(vidEl.dataset.url);
+      } else if (e.target.closest('.wl-a .btn.primary')) {
+          this.openVideo(e.target.closest('.wl-item').dataset.url);
+      } else if (e.target.closest('.wl-a .btn:not(.primary)')) {
+          this.removeFromWatchLater(e.target.closest('.wl-item').dataset.id, true);
+      }
     });
+
     D.btnCw.addEventListener('click', () => this.clearWatchedVideos());
     document.getElementById('set-rw').addEventListener('click', () => this.clearWatchedVideos());
     document.getElementById('set-cd').addEventListener('click', () => this.clearData());
@@ -93,14 +105,14 @@ class Popup {
     if (this.view === viewName) return; this.view = viewName;
     const isCh = viewName === 'channels';
     this.D.tabCh.classList.toggle('active', isCh); this.D.tabWl.classList.toggle('active', !isCh);
-    this.D.controlSet.forEach(c => c.style.display = isCh ? '' : 'none');
+    this.D.controlSet.forEach(c => c.classList.toggle('hidden', !isCh));
     this.updateUI();
   }
 
   applyFilters() {
     const ts = Date.now() - ({ '1hour': 36e5, '1day': 864e5, '1week': 6048e5, '1month': 2592e6 }[this.timeFilter] || 864e5);
     this.filteredResults = this.channelResults.map(ch => {
-      if (ch.error || (this.searchQuery && !ch.channelTitle.toLowerCase().includes(this.searchQuery)) || (this.showFilter === 'newonly' && !ch.newVideos?.length)) return null;
+      if (ch.error || (this.searchQuery && !ch.channelTitle.toLowerCase().includes(this.searchQuery))) return null;
       let fVids = (ch.totalVideos || []).filter(v => v.publishedTimestamp >= ts);
       if (this.hideWatched) fVids = fVids.filter(v => !this.watchedVideos[v.id]);
       return { ...ch, filteredVideos: fVids };
@@ -124,19 +136,19 @@ class Popup {
   }
 
   async updateStatus(text = null, type = 'normal') {
-    if (text) { this.D.stText.textContent = text; this.D.ind.className = `ind ${type}`; return; }
+    if (text) { this.D.stText.textContent = text; this.D.ind.className = `indicator ${type}`; return; }
     try {
       const r = await chrome.runtime.sendMessage({ action: 'getStatus' });
       const lastCheck = r.lastCheck ? `${Math.floor((Date.now() - r.lastCheck) / 6e4)}m ago` : 'Never';
       this.D.stText.textContent = r.lastCheck ? `Last check: ${lastCheck}` : 'Never checked';
-      this.D.ind.className = `ind ${r.lastCheckSuccess ? '' : 'error'}`;
-    } catch { this.D.stText.textContent = 'Status unknown'; this.D.ind.className = 'ind error'; }
+      this.D.ind.className = `indicator ${r.lastCheckSuccess ? '' : 'error'}`;
+    } catch { this.D.stText.textContent = 'Status unknown'; this.D.ind.className = 'indicator error'; }
   }
 
   async checkNow() {
     if (this.isChecking) return; this.isChecking = true; this.D.btnCheck.disabled = true; this.updateStatus('Checking...', 'checking');
-    try { await chrome.runtime.sendMessage({ action: 'checkNow' }); await this.refreshData(); this.showToast('✅ Check complete'); }
-    catch (e) { this.showToast('❌ Check failed', 'error'); }
+    try { await chrome.runtime.sendMessage({ action: 'checkNow' }); await this.refreshData(); this.showToast('Check complete', 'success'); }
+    catch (e) { this.showToast('Check failed', 'error'); }
     finally { this.isChecking = false; this.D.btnCheck.disabled = false; this.updateStatus(); }
   }
 
@@ -147,71 +159,81 @@ class Popup {
       if (this.sortBy === 'activity') return Math.max(...(b.filteredVideos?.map(v=>v.publishedTimestamp)||[0])) - Math.max(...(a.filteredVideos?.map(v=>v.publishedTimestamp)||[0]));
       return a.channelTitle.localeCompare(b.channelTitle);
     });
-    let html = '';
-    if (!this.filteredResults.length) html = this.getEmptyState('channels');
-    else {
-      html = this.filteredResults.map((ch, i) => {
+    
+    if (!this.filteredResults.length) {
+      this.D.res.innerHTML = this.getEmptyState('channels');
+      return;
+    }
+
+    this.D.res.innerHTML = this.filteredResults.map(ch => {
         const hasVids = ch.filteredVideos?.length > 0;
-        return `<div class="ch ${!hasVids ? 'collapsed' : ''}" data-ch-id="${i}">
-          <div class="ch-h" data-ch-id="${i}" role="button" tabindex="0"><div class="ch-t">${this.esc(ch.channelTitle)}</div>
+        return `<div class="ch collapsed">
+          <div class="ch-h"><div class="ch-t">${this.esc(ch.channelTitle)}</div>
             <div class="ch-s">
-              ${(ch.newVideos?.length||0)>0?`<span class="badge new">${ch.newVideos.length} new</span>`:''}
-              <span class="badge normal">${ch.filteredVideos?.length||0} videos</span>
-            </div></div>
-          ${hasVids ? `<div class="vids">${ch.filteredVideos.slice(0, 20).map(v => {
-            const isNew = (ch.newVideos || []).some(nv => nv.id === v.id);
-            const isWatched = this.watchedVideos[v.id];
-            const inWl = this.watchLaterMap.has(v.id);
-            return `<div class="vid ${isNew ? 'new' : ''} ${isWatched ? 'watched' : ''}" data-url="${v.url}" data-video-id="${v.id}">
-                <div class="vid-c"><div class="vid-t" title="${this.esc(v.title)}">${this.esc(v.title)}</div><div class="vid-p">${this.esc(v.published)}</div></div>
-                <div class="vid-a"><button class="wl-btn ${inWl ? 'active' : ''}" data-id="${v.id}">${inWl ? '✓' : '⏱'}</button><button class="w-btn ${isWatched ? 'active' : ''}" data-id="${v.id}">${isWatched ? '✓' : '👁️'}</button></div>
-              </div>`;
-          }).join('')}</div>` : ''}</div>`;
-      }).join('');
-    } this.D.res.innerHTML = html;
+              ${(ch.newVideos?.length||0)>0?`<span class="badge new">${ch.newVideos.length} New</span>`:''}
+              <span class="badge normal">${ch.filteredVideos?.length||0} Videos</span>
+            </div>
+            <svg class="ch-h-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd"></path></svg>
+          </div>
+          <div class="vids">${hasVids ? ch.filteredVideos.slice(0, 20).map(v => this.getVideoHTML(v, ch)).join('') : ''}</div>
+        </div>`;
+    }).join('');
   }
 
-  renderWatchLater() { this.D.res.innerHTML = !this.watchLater.length ? this.getEmptyState('wl') : `<div class="wl-list">${this.watchLater.map(v => `<div class="wl-item" data-id="${this.esc(v.id)}"><img src="${this.esc(v.thumbnail)}" class="wl-thumb" loading="lazy" alt=""><div class="wl-meta"><div class="wl-t" title="${this.esc(v.title)}">${this.esc(v.title)}</div><div class="wl-ch">📺 ${this.esc(v.channelTitle)}</div></div><div class="wl-a"><button class="btn primary wl-open" data-url="${this.esc(v.url)}">▶️</button><button class="btn secondary wl-remove" data-id="${this.esc(v.id)}">🗑️</button></div></div>`).join('')}</div>`; }
+  getVideoHTML(v, ch) {
+    const isNew = (ch.newVideos || []).some(nv => nv.id === v.id);
+    const isWatched = this.watchedVideos[v.id];
+    const inWl = this.watchLaterMap.has(v.id);
+    return `<div class="vid ${isNew ? 'new' : ''} ${isWatched ? 'watched' : ''}" data-url="${v.url}" data-video-id="${v.id}" data-channel-title="${this.esc(ch.channelTitle)}">
+      <div class="vid-c"><div class="vid-t" title="${this.esc(v.title)}">${this.esc(v.title)}</div><div class="vid-p">${this.esc(v.published)}</div></div>
+      <div class="vid-a">
+        <button class="vid-btn wl ${inWl ? 'active' : ''}" data-id="${v.id}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="18"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5z" clip-rule="evenodd"></path></svg></button>
+        <button class="vid-btn watched ${isWatched ? 'active' : ''}" data-id="${v.id}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="18"><path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.18l.88-1.473a1.65 1.65 0 0 1 1.52-.906l1.67.001c.497 0 .962.214 1.285.572l.786.812a1.65 1.65 0 0 1 0 2.316l-.786.812a1.65 1.65 0 0 1-1.285.572l-1.67-.001a1.65 1.65 0 0 1-1.52-.906l-.88-1.473zM17.456 10.59a1.651 1.651 0 0 1 0-1.18l.88-1.473a1.65 1.65 0 0 1 1.52-.906l1.67.001c.497 0 .962.214 1.285.572l.786.812a1.65 1.65 0 0 1 0 2.316l-.786.812a1.65 1.65 0 0 1-1.285.572l-1.67-.001a1.65 1.65 0 0 1-1.52-.906l-.88-1.473z" clip-rule="evenodd"></path></svg></button>
+      </div>
+    </div>`;
+  }
+  
+  renderWatchLater() { this.D.res.innerHTML = !this.watchLater.length ? this.getEmptyState('wl') : `<div class="wl-list">${this.watchLater.map(v => `<div class="wl-item" data-id="${this.esc(v.id)}" data-url="${this.esc(v.url)}"><img src="${this.esc(v.thumbnail)}" class="wl-thumb" loading="lazy"><div class="wl-meta"><div class="wl-t" title="${this.esc(v.title)}">${this.esc(v.title)}</div><div class="wl-ch">${this.esc(v.channelTitle)}</div></div><div class="wl-a"><button class="btn primary">Open</button><button class="btn">Remove</button></div></div>`).join('')}</div>`; }
   
   async toggleWatchLater(btn) {
     const id = btn.dataset.id; const vidEl = btn.closest('.vid');
-    const v = { id, url: vidEl.dataset.url, title: vidEl.querySelector('.vid-t').textContent, channelTitle: vidEl.closest('.ch').querySelector('.ch-t').textContent, published: vidEl.querySelector('.vid-p').textContent };
+    const v = { id, url: vidEl.dataset.url, title: vidEl.querySelector('.vid-t').textContent, channelTitle: vidEl.dataset.channelTitle, published: vidEl.querySelector('.vid-p').textContent };
     btn.disabled = true;
     try {
-      if (this.watchLaterMap.has(id)) { await this.removeFromWatchLater(id); } else { await chrome.runtime.sendMessage({ action: 'addToWatchLater', video: v }); this.showToast('✅ Added to Watch Later'); }
+      if (this.watchLaterMap.has(id)) { await this.removeFromWatchLater(id); } else { await chrome.runtime.sendMessage({ action: 'addToWatchLater', video: v }); this.showToast('Added to Watch Later', 'success'); }
       await this.loadWatchLater(); this.updateUI();
-    } catch(e) { this.showToast('❌ Watch Later failed', 'error'); }
+    } catch(e) { this.showToast('Watch Later failed', 'error'); }
     btn.disabled = false;
   }
   async toggleWatched(btn) {
     const id = btn.dataset.id;
     btn.disabled = true;
     try {
-      if (this.watchedVideos[id]) { delete this.watchedVideos[id]; this.showToast('Unwatched'); } else { this.watchedVideos[id] = Date.now(); this.showToast('Watched'); }
+      if (this.watchedVideos[id]) { delete this.watchedVideos[id]; this.showToast('Marked as unwatched', 'success'); } else { this.watchedVideos[id] = Date.now(); this.showToast('Marked as watched', 'success'); }
       await chrome.storage.local.set({ watchedVideos: this.watchedVideos });
       if (this.hideWatched) setTimeout(() => this.updateUI(), 100); else this.updateUI();
-    } catch(e) { this.showToast('❌ Watched failed', 'error'); }
+    } catch(e) { this.showToast('Watched failed', 'error'); }
     btn.disabled = false;
   }
 
   async removeFromWatchLater(id, confirmFirst = false) {
     if (confirmFirst && !confirm('Remove from Watch Later?')) return;
-    try { await chrome.runtime.sendMessage({ action: 'removeFromWatchLater', videoId: id }); this.showToast('✅ Removed from Watch Later'); await this.loadWatchLater(); this.updateUI(); }
-    catch(e) { this.showToast('❌ Failed to remove', 'error'); }
+    try { await chrome.runtime.sendMessage({ action: 'removeFromWatchLater', videoId: id }); this.showToast('Removed from Watch Later', 'success'); await this.loadWatchLater(); this.updateUI(); }
+    catch(e) { this.showToast('Failed to remove', 'error'); }
   }
   
-  async clearWatchedVideos() { if(confirm('Clear all watched flags?')){ try { await chrome.runtime.sendMessage({ action: 'clearWatchedVideos' }); this.showToast('✅ Watched flags cleared'); this.refreshData(); } catch(e){ this.showToast('❌ Failed', 'error'); } } }
-  async clearData() { if(confirm('Clear all cached video data?')){ this.showLoading('Clearing...'); try { await chrome.runtime.sendMessage({action:'clearCache'}); this.showToast('✅ Cache cleared'); this.refreshData(); } catch(e){ this.showToast('❌ Failed', 'error'); } } }
+  async clearWatchedVideos() { if(confirm('Clear all watched flags?')){ try { await chrome.runtime.sendMessage({ action: 'clearWatchedVideos' }); this.showToast('Watched flags cleared', 'success'); this.refreshData(); } catch(e){ this.showToast('Failed', 'error'); } } }
+  async clearData() { if(confirm('Clear all cached video data?')){ this.showLoading('Clearing...'); try { await chrome.runtime.sendMessage({action:'clearCache'}); this.showToast('Cache cleared', 'success'); this.refreshData(); } catch(e){ this.showToast('Failed', 'error'); } } }
   
   openVideo(url) { chrome.tabs.create({ url, active: this.settings.autoOpen !== 'background' }); }
   showToast(msg, type = 'success') {
     document.querySelector('.toast')?.remove();
     const t = document.createElement('div');
-    t.className = `toast ${type}`; t.textContent = msg;
+    t.className = `toast ${type}`; t.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5z" clip-rule="evenodd"></path></svg> ${msg}`;
     document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
   }
-  showLoading(msg) { this.D.res.innerHTML = `<div class="loading"><div>${msg}</div></div>`; }
+  showLoading(msg) { this.D.res.innerHTML = `<div class="loading"><div class="icon-loader">⏳</div><div>${msg}</div></div>`; }
   esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-  getEmptyState(type) { if (type === 'wl') return `<div class="empty"><h3>🕐 Empty</h3><p>Add videos with the ⏱ button.</p></div>`; return `<div class="empty"><h3>📺 No Channels</h3><p>Create a "Vid" bookmark folder with YouTube channels.</p></div>`; }
+  getEmptyState(type) { if (type === 'wl') return `<div class="empty"><div class="empty-icon">🕐</div><h3>Watch Later is Empty</h3><p>Add videos using the clock icon.</p></div>`; return `<div class="empty"><div class="empty-icon">📺</div><h3>No Channels Found</h3><p>Create a "Vid" bookmark folder with YouTube channels.</p></div>`; }
   destroy() { clearInterval(this.statusInterval); }
 }
