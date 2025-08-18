@@ -28,7 +28,7 @@ class Popup {
       fSearch: D.getElementById('f-search'), fHwCb: D.getElementById('f-hw-cb'),
       btnCw: D.getElementById('btn-cw'), setInt: D.getElementById('set-int'),
       setNotif: D.getElementById('set-notif'), setOpen: D.getElementById('set-open'),
-      controlSet: [D.getElementById('filter-controls')], // **FIX**: Only channel-specific controls are here now
+      controlSet: [D.getElementById('filter-controls')],
       btnSettings: D.getElementById('btn-settings'), settingsPanel: D.getElementById('settings-panel')
     };
   }
@@ -118,14 +118,11 @@ class Popup {
     this.view = viewName;
     const isChannelsView = viewName === 'channels';
 
-    // Toggle active class on tabs
     this.D.tabCh.classList.toggle('active', isChannelsView);
     this.D.tabWl.classList.toggle('active', !isChannelsView);
 
-    // **FIX**: Show/hide channel-specific filters
     this.D.controlSet.forEach(c => c.classList.toggle('hidden', !isChannelsView));
 
-    // **FIX**: Always hide the settings panel when switching views for a clean state
     this.D.settingsPanel.classList.add('hidden');
 
     this.updateUI();
@@ -194,7 +191,7 @@ class Popup {
         const newCount = ch.newVideos?.length || 0;
         return `<div class="ch collapsed">
           <div class="ch-h">
-            <div class.ch-t">${this.esc(ch.channelTitle)}</div>
+            <div class="ch-t">${this.esc(ch.channelTitle)}</div>
             <div class="ch-s">
               ${newCount > 0 ? `<span class="badge new">${newCount} New</span>` : ''}
               <span>${ch.filteredVideos?.length || 0} Videos</span>
@@ -282,7 +279,16 @@ class Popup {
   async clearWatchedVideos() { if(confirm('Clear all watched flags?')){ try { await chrome.runtime.sendMessage({ action: 'clearWatchedVideos' }); this.showToast('Watched flags cleared', 'success'); this.refreshData(); } catch(e){ this.showToast('Failed', 'error'); } } }
   async clearData() { if(confirm('Clear all cached video data?')){ this.showLoading('Clearing...'); try { await chrome.runtime.sendMessage({action:'clearCache'}); this.showToast('Cache cleared', 'success'); this.refreshData(); } catch(e){ this.showToast('Failed', 'error'); } } }
   
-  openVideo(url) { chrome.tabs.create({ url, active: this.settings.autoOpen !== 'background' }); }
+  async openVideo(url) {
+    if (this.settings.autoOpen === 'current') {
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (currentTab) {
+        chrome.tabs.update(currentTab.id, { url });
+      }
+    } else {
+      chrome.tabs.create({ url, active: this.settings.autoOpen !== 'background' });
+    }
+  }
   
   showToast(msg, type = 'success') {
     document.querySelector('.toast')?.remove();
