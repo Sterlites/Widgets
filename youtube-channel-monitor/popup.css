@@ -38,8 +38,8 @@ html {
 
 body {
   width: 450px;
+  min-height: 500px;
   max-height: 800px;
-  min-height: 400px;
   font-family: var(--font-sans);
   font-size: 13px;
   background-color: var(--bg-primary);

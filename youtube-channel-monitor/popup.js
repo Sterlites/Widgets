@@ -117,12 +117,17 @@ class Popup {
 
   applyFilters() {
     const ts = Date.now() - ({ '1hour': 36e5, '1day': 864e5, '1week': 6048e5, '1month': 2592e6 }[this.timeFilter] || 864e5);
+    
     this.filteredResults = this.channelResults.map(ch => {
-      if (ch.error || (this.searchQuery && !ch.channelTitle.toLowerCase().includes(this.searchQuery))) return null;
+      if (ch.error || (this.searchQuery && !ch.channelTitle.toLowerCase().includes(this.searchQuery))) {
+        return null;
+      }
       let fVids = (ch.totalVideos || []).filter(v => v.publishedTimestamp >= ts);
-      if (this.hideWatched) fVids = fVids.filter(v => !this.watchedVideos[v.id]);
+      if (this.hideWatched) {
+        fVids = fVids.filter(v => !this.watchedVideos[v.id]);
+      }
       return { ...ch, filteredVideos: fVids };
-    }).filter(Boolean);
+    }).filter(ch => ch && ch.filteredVideos.length > 0);
   }
 
   updateUI() {
@@ -170,9 +175,8 @@ class Popup {
     }
 
     this.D.res.innerHTML = this.filteredResults.map(ch => {
-        const hasVids = ch.filteredVideos?.length > 0;
         const newCount = ch.newVideos?.length || 0;
-        return `<div class="ch ${!hasVids ? 'collapsed' : ''}">
+        return `<div class="ch collapsed">
           <div class="ch-h">
             <div class="ch-t">${this.esc(ch.channelTitle)}</div>
             <div class="ch-s">
@@ -181,7 +185,7 @@ class Popup {
             </div>
             <svg class="ch-h-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd"></path></svg>
           </div>
-          <div class="vids">${hasVids ? ch.filteredVideos.slice(0, 20).map(v => this.getVideoHTML(v, ch)).join('') : ''}</div>
+          <div class="vids">${ch.filteredVideos.slice(0, 20).map(v => this.getVideoHTML(v, ch)).join('')}</div>
         </div>`;
     }).join('');
   }
@@ -254,6 +258,6 @@ class Popup {
   
   showLoading(msg) { this.D.res.innerHTML = `<div class="loading"><div class="icon-loader">⏳</div><div>${msg}</div></div>`; }
   esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-  getEmptyState(type) { if (type === 'wl') return `<div class="empty"><div class="empty-icon">🕐</div><h3>Watch Later is Empty</h3><p>Add videos using the clock icon.</p></div>`; return `<div class="empty"><div class="empty-icon">📺</div><h3>No Channels Found</h3><p>Create a "Vid" bookmark folder with YouTube channels.</p></div>`; }
+  getEmptyState(type) { if (type === 'wl') return `<div class="empty"><div class="empty-icon">🕐</div><h3>Watch Later is Empty</h3><p>Add videos using the clock icon.</p></div>`; return `<div class="empty"><div class="empty-icon">📺</div><h3>No Videos Found</h3><p>Try adjusting your filters or adding more channels to your "Vid" bookmarks folder.</p></div>`; }
   destroy() { clearInterval(this.statusInterval); }
 }
