@@ -28,7 +28,8 @@ class Popup {
       fSearch: D.getElementById('f-search'), fHwCb: D.getElementById('f-hw-cb'),
       btnCw: D.getElementById('btn-cw'), setInt: D.getElementById('set-int'),
       setNotif: D.getElementById('set-notif'), setOpen: D.getElementById('set-open'),
-      controlSet: [D.getElementById('filter-controls')]
+      controlSet: [D.getElementById('filter-controls'), D.getElementById('settings-panel')],
+      btnSettings: D.getElementById('btn-settings'), settingsPanel: D.getElementById('settings-panel')
     };
   }
   
@@ -70,7 +71,8 @@ class Popup {
     D.fSearch.addEventListener('input', e => { clearTimeout(this.searchDebounce); this.searchDebounce = setTimeout(() => { this.searchQuery = e.target.value.toLowerCase(); this.updateUI(); }, 150); });
     D.tabCh.addEventListener('click', () => this.switchView('channels'));
     D.tabWl.addEventListener('click', () => this.switchView('watchLater'));
-    
+    D.btnSettings.addEventListener('click', () => this.toggleSettings());
+
     D.res.addEventListener('click', e => {
       const target = e.target;
       const vidBtn = target.closest('.vid-btn');
@@ -103,6 +105,10 @@ class Popup {
     D.setNotif.addEventListener('change', e => this.saveSetting('notifications', e.target.checked));
     D.setOpen.addEventListener('change', e => this.saveSetting('autoOpen', e.target.value));
   }
+  
+  toggleSettings() {
+    this.D.settingsPanel.classList.toggle('hidden');
+  }
 
   handleFilterChange(key, value) { this[key] = value; chrome.storage.local.set({ [key]: value }); this.updateUI(); }
   saveSetting(key, value) { this.settings[key] = value; chrome.storage.local.set({ [key]: value }); }
@@ -112,6 +118,11 @@ class Popup {
     const isCh = viewName === 'channels';
     this.D.tabCh.classList.toggle('active', isCh); this.D.tabWl.classList.toggle('active', !isCh);
     this.D.controlSet.forEach(c => c.classList.toggle('hidden', !isCh));
+    if (isCh) {
+      this.D.controlSet[0].classList.remove('hidden'); // Always show filters for channels view
+    } else {
+      this.D.settingsPanel.classList.add('hidden'); // Hide settings when switching away
+    }
     this.updateUI();
   }
 

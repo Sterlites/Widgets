@@ -25,20 +25,31 @@
                     Channels
                 </button>
                 <button id="tab-wl" class="tab" role="tab">
-                    <svg xmlns="http://www.w.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5z" clip-rule="evenodd"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5z" clip-rule="evenodd"></path></svg>
                     Watch Later
                 </button>
             </div>
             <button id="btn-check" class="btn primary">
-                 <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M16.03 4.47a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06L9 10.94l6.03-5.97a.75.75 0 0 1 .94.06Z" clip-rule="evenodd" /></svg>
+                 <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" fill="currentColor"><path d="M16.03 4.47a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06L9 10.94l6.03-5.97a.75.75 0 0 1 .94.06Z" clip-rule="evenodd" /></svg>
                  <svg class="icon-loader" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.312a.75.75 0 0 1 0-1.062l1.98-1.98a.75.75 0 0 1 1.06 0V3.75a.75.75 0 0 1-1.5 0v-.379l-1.98 1.98a.75.75 0 0 1-1.06 0ZM4.688 8.688a.75.75 0 0 1 0 1.062l-1.98 1.98a.75.75 0 0 1-1.06 0V16.25a.75.75 0 0 1 1.5 0v.379l1.98-1.98a.75.75 0 0 1 1.06 0ZM11.312 4.688a.75.75 0 0 1 1.062 0l1.98 1.98a.75.75 0 0 1 0 1.06V11.25a.75.75 0 0 1-1.5 0v.379l-1.98-1.98a.75.75 0 0 1 0-1.062ZM8.688 15.312a.75.75 0 0 1-1.062 0l-1.98-1.98a.75.75 0 0 1 0-1.06V8.75a.75.75 0 0 1 1.5 0v-.379l1.98 1.98a.75.75 0 0 1 0 1.062Z" clip-rule="evenodd"></path></svg>
                 Check Now
+            </button>
+            <button id="btn-settings" class="btn" title="Settings" >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 0 1-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 0 1 .947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 0 1 2.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 0 1 2.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 0 1-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 0 1-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 0 1-2.287-.947ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd" /></svg>
+                Settings
             </button>
         </div>
         <div class="filter-controls" id="filter-controls">
             <input type="search" id="f-search" placeholder="Search channels...">
             <select id="f-time"><option value="1hour">Last 1 hour</option><option value="1day">Last 24 hours</option><option value="1week">Last week</option><option value="1month">Last month</option><option value="sincelastvisit">Since last visit</option></select>
             <select id="f-sort"><option value="activity">⚡ Activity</option><option value="new">✨ New Videos</option><option value="name">🔤 Name</option></select>
+        </div>
+        <div id="settings-panel" class="settings-panel hidden">
+            <div class="set-i"><label for="set-int">Check Interval:</label><select id="set-int"><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
+            <div class="set-i"><label for="set-open">Open Videos In:</label><select id="set-open"><option value="current">Current Tab</option><option value="new">New Tab</option><option value="background">Background Tab</option></select></div>
+            <div class="set-i"><label for="f-hw-cb">Hide Watched Videos</label><input type="checkbox" id="f-hw-cb"></div>
+            <div class="set-i"><label for="set-notif">Desktop Notifications</label><input type="checkbox" id="set-notif"></div>
+            <div class="set-i"><label>Actions</label><div style="display:flex; gap: 8px;"><button id="btn-cw" class="btn warning">Clear Watched</button><button id="set-cd" class="btn">Clear Cache</button></div></div>
         </div>
     </div>
 
@@ -49,17 +60,6 @@
     </div>
 
     <main id="res" class="res"></main>
-
-    <details class="set" id="set">
-        <summary>Settings</summary>
-        <div class="set-c">
-            <div class="set-i"><label for="set-int">Check Interval:</label><select id="set-int"><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
-            <div class="set-i"><label for="set-open">Open Videos In:</label><select id="set-open"><option value="current">Current Tab</option><option value="new">New Tab</option><option value="background">Background Tab</option></select></div>
-            <div class="set-i"><label for="f-hw-cb">Hide Watched Videos</label><input type="checkbox" id="f-hw-cb"></div>
-            <div class="set-i"><label for="set-notif">Desktop Notifications</label><input type="checkbox" id="set-notif"></div>
-            <div class="set-i"><label>Actions</label><div style="display:flex; gap: 8px;"><button id="btn-cw" class="btn warning">Clear Watched</button><button id="set-cd" class="btn">Clear Cache</button></div></div>
-        </div>
-    </details>
 
     <script src="popup.js"></script>
 </body>
