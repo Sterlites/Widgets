@@ -28,7 +28,7 @@ class Popup {
       fSearch: D.getElementById('f-search'), fHwCb: D.getElementById('f-hw-cb'),
       btnCw: D.getElementById('btn-cw'), setInt: D.getElementById('set-int'),
       setNotif: D.getElementById('set-notif'), setOpen: D.getElementById('set-open'),
-      controlSet: [D.getElementById('filter-controls'), D.getElementById('settings-panel')],
+      controlSet: [D.getElementById('filter-controls')], // **FIX**: Only channel-specific controls are here now
       btnSettings: D.getElementById('btn-settings'), settingsPanel: D.getElementById('settings-panel')
     };
   }
@@ -114,15 +114,20 @@ class Popup {
   saveSetting(key, value) { this.settings[key] = value; chrome.storage.local.set({ [key]: value }); }
   
   switchView(viewName) {
-    if (this.view === viewName) return; this.view = viewName;
-    const isCh = viewName === 'channels';
-    this.D.tabCh.classList.toggle('active', isCh); this.D.tabWl.classList.toggle('active', !isCh);
-    this.D.controlSet.forEach(c => c.classList.toggle('hidden', !isCh));
-    if (isCh) {
-      this.D.controlSet[0].classList.remove('hidden'); // Always show filters for channels view
-    } else {
-      this.D.settingsPanel.classList.add('hidden'); // Hide settings when switching away
-    }
+    if (this.view === viewName) return;
+    this.view = viewName;
+    const isChannelsView = viewName === 'channels';
+
+    // Toggle active class on tabs
+    this.D.tabCh.classList.toggle('active', isChannelsView);
+    this.D.tabWl.classList.toggle('active', !isChannelsView);
+
+    // **FIX**: Show/hide channel-specific filters
+    this.D.controlSet.forEach(c => c.classList.toggle('hidden', !isChannelsView));
+
+    // **FIX**: Always hide the settings panel when switching views for a clean state
+    this.D.settingsPanel.classList.add('hidden');
+
     this.updateUI();
   }
 
@@ -189,12 +194,12 @@ class Popup {
         const newCount = ch.newVideos?.length || 0;
         return `<div class="ch collapsed">
           <div class="ch-h">
-            <div class="ch-t">${this.esc(ch.channelTitle)}</div>
+            <div class.ch-t">${this.esc(ch.channelTitle)}</div>
             <div class="ch-s">
               ${newCount > 0 ? `<span class="badge new">${newCount} New</span>` : ''}
               <span>${ch.filteredVideos?.length || 0} Videos</span>
             </div>
-            <svg class="ch-h-arrow" xmlns="http.www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd"></path></svg>
+            <svg class="ch-h-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd"></path></svg>
           </div>
           <div class="vids">${ch.filteredVideos.slice(0, 20).map(v => this.getVideoHTML(v, ch)).join('')}</div>
         </div>`;
