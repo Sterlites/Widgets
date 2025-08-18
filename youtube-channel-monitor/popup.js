@@ -194,7 +194,7 @@ class Popup {
               ${newCount > 0 ? `<span class="badge new">${newCount} New</span>` : ''}
               <span>${ch.filteredVideos?.length || 0} Videos</span>
             </div>
-            <svg class="ch-h-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd"></path></svg>
+            <svg class="ch-h-arrow" xmlns="http.www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd"></path></svg>
           </div>
           <div class="vids">${ch.filteredVideos.slice(0, 20).map(v => this.getVideoHTML(v, ch)).join('')}</div>
         </div>`;
@@ -205,7 +205,11 @@ class Popup {
     const isNew = (ch.newVideos || []).some(nv => nv.id === v.id);
     const isWatched = this.watchedVideos[v.id];
     const inWl = this.watchLaterMap.has(v.id);
-    return `<div class="vid ${isNew ? 'new' : ''} ${isWatched ? 'watched' : ''}" data-url="${v.url}" data-video-id="${v.id}" data-channel-title="${this.esc(ch.channelTitle)}">
+    return `<div class="vid ${isNew ? 'new' : ''} ${isWatched ? 'watched' : ''}" 
+                 data-url="${v.url}" 
+                 data-video-id="${v.id}" 
+                 data-channel-title="${this.esc(ch.channelTitle)}"
+                 data-thumbnail="${this.esc(v.thumbnail || '')}">
       <div class="vid-c"><div class="vid-t" title="${this.esc(v.title)}">${this.esc(v.title)}</div><div class="vid-p">${this.esc(v.published)}</div></div>
       <div class="vid-a">
         <button class="vid-btn wl ${inWl ? 'active' : ''}" data-id="${v.id}" title="Watch Later"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="18"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5z" clip-rule="evenodd"></path></svg></button>
@@ -214,17 +218,32 @@ class Popup {
     </div>`;
   }
   
-  renderWatchLater() { this.D.res.innerHTML = !this.watchLater.length ? this.getEmptyState('wl') : `<div class="wl-list">${this.watchLater.map(v => `<div class="wl-item" data-id="${this.esc(v.id)}" data-url="${this.esc(v.url)}"><img src="${this.esc(v.thumbnail)}" class="wl-thumb" loading="lazy"><div class="wl-meta"><div class="wl-t" title="${this.esc(v.title)}">${this.esc(v.title)}</div><div class="wl-ch">${this.esc(v.channelTitle)}</div></div><div class="wl-a"><button class="btn primary">Open</button><button class="btn">Remove</button></div></div>`).join('')}</div>`; }
+  renderWatchLater() { this.D.res.innerHTML = !this.watchLater.length ? this.getEmptyState('wl') : `<div class="wl-list">${this.watchLater.map(v => `<div class="wl-item" data-id="${this.esc(v.id)}" data-url="${this.esc(v.url)}"><img src="${this.esc(v.thumbnail)}" class="wl-thumb" loading="lazy" onerror="this.style.display='none'"><div class="wl-meta"><div class="wl-t" title="${this.esc(v.title)}">${this.esc(v.title)}</div><div class="wl-ch">${this.esc(v.channelTitle)}</div></div><div class="wl-a"><button class="btn primary">Open</button><button class="btn">Remove</button></div></div>`).join('')}</div>`; }
   
   async toggleWatchLater(btn) {
-    const id = btn.dataset.id; const vidEl = btn.closest('.vid');
-    const v = { id, url: vidEl.dataset.url, title: vidEl.querySelector('.vid-t').textContent, channelTitle: vidEl.dataset.channelTitle, published: vidEl.querySelector('.vid-p').textContent };
+    const id = btn.dataset.id;
+    const vidEl = btn.closest('.vid');
+    const v = {
+      id,
+      url: vidEl.dataset.url,
+      title: vidEl.querySelector('.vid-t').textContent,
+      channelTitle: vidEl.dataset.channelTitle,
+      published: vidEl.querySelector('.vid-p').textContent,
+      thumbnail: vidEl.dataset.thumbnail
+    };
     btn.disabled = true;
     try {
-      if (this.watchLaterMap.has(id)) { await this.removeFromWatchLater(id); } else { await chrome.runtime.sendMessage({ action: 'addToWatchLater', video: v }); this.showToast('Added to Watch Later', 'success'); }
+      if (this.watchLaterMap.has(id)) {
+        await this.removeFromWatchLater(id);
+      } else {
+        await chrome.runtime.sendMessage({ action: 'addToWatchLater', video: v });
+        this.showToast('Added to Watch Later', 'success');
+      }
       await this.loadWatchLater();
       this.updateUI();
-    } catch(e) { this.showToast('Watch Later failed', 'error'); }
+    } catch(e) {
+      this.showToast('Watch Later failed', 'error');
+    }
     btn.disabled = false;
   }
 
