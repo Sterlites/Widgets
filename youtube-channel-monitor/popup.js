@@ -29,7 +29,9 @@ class Popup {
       btnCw: D.getElementById('btn-cw'), setInt: D.getElementById('set-int'),
       setNotif: D.getElementById('set-notif'), setOpen: D.getElementById('set-open'),
       controlSet: [D.getElementById('filter-controls')],
-      btnSettings: D.getElementById('btn-settings'), settingsPanel: D.getElementById('settings-panel')
+      btnSettings: D.getElementById('btn-settings'), settingsPanel: D.getElementById('settings-panel'),
+      btnExpandAll: D.getElementById('btn-expand-all'),
+      btnCollapseAll: D.getElementById('btn-collapse-all')
     };
   }
   
@@ -72,6 +74,8 @@ class Popup {
     D.tabCh.addEventListener('click', () => this.switchView('channels'));
     D.tabWl.addEventListener('click', () => this.switchView('watchLater'));
     D.btnSettings.addEventListener('click', () => this.toggleSettings());
+    D.btnExpandAll.addEventListener('click', () => this.toggleAllChannels(true));
+    D.btnCollapseAll.addEventListener('click', () => this.toggleAllChannels(false));
 
     D.res.addEventListener('click', e => {
       const target = e.target;
@@ -108,6 +112,17 @@ class Popup {
   
   toggleSettings() {
     this.D.settingsPanel.classList.toggle('hidden');
+  }
+
+  toggleAllChannels(expand) {
+    const channels = this.D.res.querySelectorAll('.ch');
+    channels.forEach(channel => {
+      if (expand) {
+        channel.classList.remove('collapsed');
+      } else {
+        channel.classList.add('collapsed');
+      }
+    });
   }
 
   handleFilterChange(key, value) { this[key] = value; chrome.storage.local.set({ [key]: value }); this.updateUI(); }
