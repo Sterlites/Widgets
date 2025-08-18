@@ -496,6 +496,43 @@ class YouTubeChannelMonitor {
     }
   }
 
+  // NEW: Get watched videos
+  async getWatchedVideos() {
+    try {
+      const result = await this.getStorage(['watchedVideos']);
+      return result.watchedVideos || {};
+    } catch (error) {
+      console.error('❌ Failed to get watched videos:', error);
+      return {};
+    }
+  }
+
+  // NEW: Mark video as watched
+  async markVideoWatched(videoId) {
+    try {
+      const watchedVideos = await this.getWatchedVideos();
+      watchedVideos[videoId] = Date.now();
+      await this.setStorage({ watchedVideos });
+      console.log(`✅ Marked video ${videoId} as watched`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to mark video as watched:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Clear watched status (used during manual check)
+  async clearWatchedVideos() {
+    try {
+      await this.setStorage({ watchedVideos: {} });
+      console.log('✅ Cleared all watched video flags');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to clear watched videos:', error);
+      throw error;
+    }
+  }
+
   async checkAllChannels(isManualCheck = false) {
     const startTime = Date.now();
     console.log(`🔍 Starting ${isManualCheck ? 'manual' : 'automatic'} check...`);
@@ -503,10 +540,16 @@ class YouTubeChannelMonitor {
     try {
       await this.updateBadge('...', '#f59e0b');
       this.state.stats.totalChecks++;
+
+      // NEW: Clear watched flags on manual check
+      if (isManualCheck) {
+        await this.clearWatchedVideos();
+        console.log('🔄 Cleared watched flags for manual check');
+      }
       
       const bookmarks = await this.getChannelBookmarks();
       if (!bookmarks.length) {
-        console.log('📭 No bookmarks found');
+        console.log('🔭 No bookmarks found');
         await this.storeChannelResults([]);
         await this.updateBadge('');
         return;
@@ -514,6 +557,9 @@ class YouTubeChannelMonitor {
 
       const timeFilter = await this.getTimeFilter();
       const filterTimestamp = await this.getTimeFilterTimestamp(timeFilter);
+      
+      // NEW: Get watched videos to filter them out
+      const watchedVideos = await this.getWatchedVideos();
       
       let totalNewVideos = 0;
       const channelResults = [];
@@ -524,7 +570,7 @@ class YouTubeChannelMonitor {
         try {
           console.log(`📺 Processing ${bookmark.title} (${index + 1}/${bookmarks.length})`);
           
-          const result = await this.processChannel(bookmark, filterTimestamp);
+          const result = await this.processChannel(bookmark, filterTimestamp, watchedVideos, isManualCheck);
           if (result) {
             channelResults.push(result);
             totalNewVideos += result.newVideos?.length || 0;
@@ -602,7 +648,7 @@ class YouTubeChannelMonitor {
     }
   }
 
-  async processChannel(bookmark, filterTimestamp) {
+  async processChannel(bookmark, filterTimestamp, watchedVideos = {}, isManualCheck = false) {
     const currentVideos = await this.fetchChannelVideos(bookmark.url);
     if (!currentVideos) {
       throw new Error('Failed to fetch videos - channel may be private or deleted');
@@ -612,12 +658,22 @@ class YouTubeChannelMonitor {
     const storedIds = new Set(storedVideos.map(v => v.id));
     
     // Find truly new videos (not in stored cache)
-    const newVideos = currentVideos.filter(video => !storedIds.has(video.id));
+    let newVideos = currentVideos.filter(video => !storedIds.has(video.id));
+    
+    // NEW: Filter out watched videos from new videos unless manual check
+    if (!isManualCheck) {
+      newVideos = newVideos.filter(video => !watchedVideos[video.id]);
+    }
     
     // Find videos matching time filter
-    const filteredVideos = currentVideos.filter(video => 
+    let filteredVideos = currentVideos.filter(video => 
       video.publishedTimestamp >= filterTimestamp
     );
+    
+    // NEW: Filter out watched videos from filtered results unless manual check
+    if (!isManualCheck) {
+      filteredVideos = filteredVideos.filter(video => !watchedVideos[video.id]);
+    }
 
     // Store updated video list if we found new content
     if (newVideos.length > 0) {
@@ -860,6 +916,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { success: true, imported: Object.keys(filteredSettings) };
     },
 
+    // NEW: Mark video as watched
+    async markVideoWatched() {
+      const { videoId } = message;
+      if (!videoId) {
+        throw new Error('Missing videoId parameter');
+      }
+      
+      const result = await monitor.markVideoWatched(videoId);
+      return result;
+    },
+
+    // NEW: Get watched videos
+    async getWatchedVideos() {
+      const watchedVideos = await monitor.getWatchedVideos();
+      return { success: true, watchedVideos };
+    },
+
+    // NEW: Clear all watched videos
+    async clearWatchedVideos() {
+      const result = await monitor.clearWatchedVideos();
+      return result;
+    },
+
     // Watch Later actions with enhanced error handling
     async getWatchLater() {
       const list = await monitor.getWatchLaterVideos();
@@ -926,7 +1005,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           storage: {
             totalSize: storageSize,
             cacheEntries,
-            watchLaterCount: (storage.watchLaterVideos || []).length
+            watchLaterCount: (storage.watchLaterVideos || []).length,
+            watchedCount: Object.keys(storage.watchedVideos || {}).length
           },
           alarms: {
             checkScheduled: !!checkAlarm,
@@ -1030,12 +1110,15 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       autoOpen: 'current',
       installDate: Date.now(),
       watchLaterVideos: [],
+      watchedVideos: {}, // NEW: Initialize watched videos storage
       showFilter: 'all',
+      hideWatched: false, // NEW: Setting to hide watched videos
       // Feature flags for future enhancements
       features: {
         enhancedNotifications: true,
         exportImport: true,
-        storageOptimization: true
+        storageOptimization: true,
+        watchedVideoTracking: true
       }
     });
     
@@ -1058,12 +1141,21 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     
     console.log(`📈 Updated from ${previousVersion} to ${currentVersion}`);
     
-    // Migration logic for different versions can go here
+    // Migration logic for different versions
     await monitor.setStorage({
       lastUpdateDate: Date.now(),
       previousVersion,
       currentVersion
     });
+
+    // NEW: Add watched videos storage if updating from older version
+    const existing = await monitor.getStorage(['watchedVideos', 'hideWatched']);
+    if (!existing.watchedVideos) {
+      await monitor.setStorage({ 
+        watchedVideos: {},
+        hideWatched: false
+      });
+    }
     
     // Clear cache on major updates to prevent compatibility issues
     if (previousVersion && previousVersion.split('.')[0] !== currentVersion.split('.')[0]) {

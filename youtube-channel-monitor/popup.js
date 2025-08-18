@@ -24,12 +24,14 @@ window.addEventListener('beforeunload', () => {
 chrome.storage.onChanged.addListener((changes) => {
   if (!window.popupController) return;
 
-  if (changes.channelResults) {
+  if (changes.channelResults || changes.watchedVideos) {
     // Use requestAnimationFrame to prevent layout thrashing
     requestAnimationFrame(() => {
       window.popupController.loadChannelResults().then(() => {
-        window.popupController.applyFilters();
-        window.popupController.updateUI();
+        window.popupController.loadWatchedVideos().then(() => {
+          window.popupController.applyFilters();
+          window.popupController.updateUI();
+        });
       }).catch(console.error);
     });
   }
@@ -43,7 +45,7 @@ chrome.storage.onChanged.addListener((changes) => {
   }
 
   // Handle settings changes
-  if (changes.checkInterval || changes.timeFilter || changes.notifications || changes.autoOpen) {
+  if (changes.checkInterval || changes.timeFilter || changes.notifications || changes.autoOpen || changes.hideWatched) {
     window.popupController.loadSettings().catch(console.error);
   }
 });
@@ -88,6 +90,10 @@ class PopupController {
     this.watchLater = [];
     this.watchLaterMap = new Map();
 
+    // NEW: Watched videos state
+    this.watchedVideos = {};
+    this.hideWatched = false;
+
     // View state: 'channels' or 'watchLater'
     this.view = 'channels';
 
@@ -107,27 +113,27 @@ class PopupController {
   }
 
   // FIXED: Pre-initialize layout to prevent shaking with exact dimensions
-initializeLayout() {
-  // FIXED: Force immediate layout stability
-  const body = document.body;
-  
-  // Set initial dimensions before any content loads
-  body.style.width = '617px'; // 600px + 17px scrollbar
-  body.style.minWidth = '617px';
-  body.style.maxWidth = '617px';
-  body.style.height = '700px';
-  body.style.minHeight = '700px';
-  body.style.maxHeight = '700px';
-  body.style.overflow = 'hidden';
-  body.style.scrollbarGutter = 'stable';
+  initializeLayout() {
+    // FIXED: Force immediate layout stability
+    const body = document.body;
+    
+    // Set initial dimensions before any content loads
+    body.style.width = '617px'; // 600px + 17px scrollbar
+    body.style.minWidth = '617px';
+    body.style.maxWidth = '617px';
+    body.style.height = '700px';
+    body.style.minHeight = '700px';
+    body.style.maxHeight = '700px';
+    body.style.overflow = 'hidden';
+    body.style.scrollbarGutter = 'stable';
 
     // FIXED: Pre-allocate scrollbar space
-  const results = document.getElementById('results');
-  if (results) {
-    results.style.scrollbarGutter = 'stable';
-    results.style.overflowY = 'scroll';
-    results.style.width = '600px';
-  }
+    const results = document.getElementById('results');
+    if (results) {
+      results.style.scrollbarGutter = 'stable';
+      results.style.overflowY = 'scroll';
+      results.style.width = '600px';
+    }
     
     // Set initial stats to prevent layout shifts with exact text
     const updates = [
@@ -135,6 +141,7 @@ initializeLayout() {
       ['newCount', '0'], 
       ['totalCount', '0'],
       ['watchLaterCount', '0'],
+      ['watchedCount', '0'], // NEW
       ['statusText', 'Initializing...']
     ];
     
@@ -158,6 +165,7 @@ initializeLayout() {
       document.getElementById('sortBy').value = 'activity';
       document.getElementById('showFilter').value = 'all';
       document.getElementById('notifications').checked = false;
+      document.getElementById('hideWatchedCheckbox').checked = false;
       
       const autoOpenElement = document.getElementById('autoOpen');
       if (autoOpenElement) {
@@ -176,6 +184,7 @@ initializeLayout() {
       });
       
       await this.loadSettings();
+      await this.loadWatchedVideos(); // NEW
       await this.loadWatchLater();
       await this.loadChannelResults();
       
@@ -218,7 +227,7 @@ initializeLayout() {
 
   async loadSettings() {
     const result = await chrome.storage.local.get([
-      'checkInterval', 'timeFilter', 'notifications', 'autoOpen', 'lastCheck', 'showFilter'
+      'checkInterval', 'timeFilter', 'notifications', 'autoOpen', 'lastCheck', 'showFilter', 'hideWatched'
     ]);
     
     this.settings = {
@@ -229,6 +238,7 @@ initializeLayout() {
 
     this.timeFilter = result.timeFilter || '1day';
     this.showFilter = result.showFilter || 'all';
+    this.hideWatched = result.hideWatched || false; // NEW
 
     // FIXED: Update UI elements with batch DOM updates to prevent layout thrashing
     const updates = [
@@ -237,6 +247,7 @@ initializeLayout() {
       ['sortBy', 'activity'],
       ['showFilter', this.showFilter],
       ['notifications', this.settings.notifications], // checkbox
+      ['hideWatchedCheckbox', this.hideWatched], // NEW checkbox
     ];
 
     // FIXED: Batch DOM updates in single frame
@@ -275,9 +286,31 @@ initializeLayout() {
     await chrome.storage.local.set({ showFilter: this.showFilter });
   }
 
+  // NEW: Save hide watched setting
+  async saveHideWatched() {
+    await chrome.storage.local.set({ hideWatched: this.hideWatched });
+  }
+
   async loadChannelResults() {
     const result = await chrome.storage.local.get(['channelResults']);
     this.channelResults = result.channelResults || [];
+  }
+
+  // NEW: Load watched videos
+  async loadWatchedVideos() {
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'getWatchedVideos' });
+      if (result && result.success) {
+        this.watchedVideos = result.watchedVideos || {};
+      } else {
+        const res = await chrome.storage.local.get(['watchedVideos']);
+        this.watchedVideos = res.watchedVideos || {};
+      }
+    } catch (error) {
+      console.error('Failed to load watched videos:', error);
+      const res = await chrome.storage.local.get(['watchedVideos']);
+      this.watchedVideos = res.watchedVideos || {};
+    }
   }
 
   async loadWatchLater() {
@@ -323,6 +356,17 @@ initializeLayout() {
       this.saveShowFilter();
       this.debouncedFilterUpdate();
     });
+
+    // NEW: Hide watched checkbox
+    document.getElementById('hideWatchedCheckbox').addEventListener('change', (e) => {
+      this.hideWatched = e.target.checked;
+      this.saveHideWatched();
+      this.debouncedFilterUpdate();
+      this.showToast(this.hideWatched ? 'Hiding watched videos' : 'Showing watched videos');
+    });
+
+    // NEW: Clear watched button
+    document.getElementById('clearWatched').addEventListener('click', () => this.clearWatchedVideos());
     
     // FIXED: Search with enhanced debouncing and smooth updates
     document.getElementById('search').addEventListener('input', (e) => {
@@ -356,6 +400,9 @@ initializeLayout() {
     }
 
     document.getElementById('clearData').addEventListener('click', () => this.clearData());
+    
+    // NEW: Reset watched videos button
+    document.getElementById('resetWatched').addEventListener('click', () => this.resetWatchedVideos());
     
     const exportButton = document.getElementById('exportData');
     if (exportButton) {
@@ -440,6 +487,14 @@ initializeLayout() {
         e.preventDefault();
         this.checkNow();
       }
+
+      // NEW: H to toggle hide watched
+      if (e.key === 'h') {
+        e.preventDefault();
+        const checkbox = document.getElementById('hideWatchedCheckbox');
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change'));
+      }
     });
   }
 
@@ -470,7 +525,7 @@ initializeLayout() {
       watchLaterTab.setAttribute('aria-selected', !isChannels ? 'true' : 'false');
 
       // Show appropriate controls with batch style updates
-      const controls = document.querySelectorAll('#timeFilter, #sortBy, #showFilter, #search');
+      const controls = document.querySelectorAll('#timeFilter, #sortBy, #showFilter, #search, #hideWatched, #clearWatched');
       const displayStyle = isChannels ? '' : 'none';
       controls.forEach(control => {
         if (control.style.display !== displayStyle) {
@@ -508,9 +563,16 @@ initializeLayout() {
       }
 
       const allVideos = channel.totalVideos || [];
-      const timeFilteredVideos = allVideos.filter(video => 
+      let timeFilteredVideos = allVideos.filter(video => 
         video.publishedTimestamp >= filterTimestamp
       );
+
+      // NEW: Filter out watched videos if hideWatched is enabled
+      if (this.hideWatched) {
+        timeFilteredVideos = timeFilteredVideos.filter(video => 
+          !this.watchedVideos[video.id]
+        );
+      }
 
       // Apply search filter
       const matchesSearch = !this.searchQuery || 
@@ -551,6 +613,7 @@ initializeLayout() {
     try {
       await chrome.runtime.sendMessage({ action: 'checkNow' });
       await this.loadChannelResults();
+      await this.loadWatchedVideos(); // NEW: Refresh watched videos
       await this.loadWatchLater(); // Refresh watch later in case of changes
       this.applyFilters();
       
@@ -599,10 +662,50 @@ initializeLayout() {
     }
   }
 
+  // NEW: Clear watched videos
+  async clearWatchedVideos() {
+    if (!confirm('⚠️ This will clear all watched video flags. Are you sure?')) return;
+    
+    try {
+      await chrome.runtime.sendMessage({ action: 'clearWatchedVideos' });
+      await this.loadWatchedVideos();
+      this.applyFilters();
+      
+      requestAnimationFrame(() => {
+        this.updateUI();
+      });
+      
+      this.showToast('✅ Watched flags cleared successfully');
+    } catch (error) {
+      console.error('Clear watched failed:', error);
+      this.showToast('❌ Failed to clear watched flags', 'error');
+    }
+  }
+
+  // NEW: Reset watched videos (same as clear but different UX context)
+  async resetWatchedVideos() {
+    if (!confirm('🔄 This will reset all watched video tracking. Are you sure?')) return;
+    
+    try {
+      await chrome.runtime.sendMessage({ action: 'clearWatchedVideos' });
+      await this.loadWatchedVideos();
+      this.applyFilters();
+      
+      requestAnimationFrame(() => {
+        this.updateUI();
+      });
+      
+      this.showToast('✅ Watched video tracking reset');
+    } catch (error) {
+      console.error('Reset watched failed:', error);
+      this.showToast('❌ Failed to reset watched tracking', 'error');
+    }
+  }
+
   async exportWatchLater() {
     try {
       if (!this.watchLater || this.watchLater.length === 0) {
-        this.showToast('📝 Watch Later list is empty', 'error');
+        this.showToast('📁 Watch Later list is empty', 'error');
         return;
       }
 
@@ -733,20 +836,28 @@ initializeLayout() {
         trulyNewVideoIds.has(v.id) : newVideoIds.has(v.id);
       
       const inWatchLater = this.watchLaterMap.has(v.id);
+      const isWatched = this.watchedVideos[v.id]; // NEW
         
       return `
-        <div class="video ${isNew ? 'new' : ''}" data-url="${v.url}" data-video-id="${v.id}" role="button" tabindex="0" style="min-height: 50px;">
+        <div class="video ${isNew ? 'new' : ''} ${isWatched ? 'watched' : ''}" data-url="${v.url}" data-video-id="${v.id}" role="button" tabindex="0" style="min-height: 50px;">
           <div class="video-content">
             <div class="video-title" title="${this.escapeHtml(v.title)}">${this.escapeHtml(this.truncateText(v.title, 80))}</div>
             <div class="video-published" title="Published ${this.escapeHtml(v.published)}">${this.escapeHtml(v.published)}</div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center; height: 30px;">
+          <div class="video-actions">
             <button class="watch-later-btn ${inWatchLater ? 'watch-later-active' : ''}" 
                     aria-pressed="${inWatchLater ? 'true' : 'false'}" 
                     data-id="${v.id}" 
                     title="${inWatchLater ? 'Remove from Watch Later' : 'Add to Watch Later'}"
                     tabindex="0">
               ${inWatchLater ? '✓' : '⏱'}
+            </button>
+            <button class="watched-btn ${isWatched ? 'watched-active' : ''}"
+                    aria-pressed="${isWatched ? 'true' : 'false'}"
+                    data-id="${v.id}"
+                    title="${isWatched ? 'Mark as unwatched' : 'Mark as watched'}"
+                    tabindex="0">
+              ${isWatched ? '✓' : '👁️'}
             </button>
           </div>
         </div>`; 
@@ -758,508 +869,603 @@ initializeLayout() {
     return text.substring(0, maxLength - 3) + '...';
   }
 
-setupChannelEventListeners() {
-  // Handle channel header clicks and keyboard
-  document.querySelectorAll('[data-toggle]').forEach(header => {
-    const handleToggle = (e) => {
-      const index = e.currentTarget.getAttribute('data-toggle');
-      const channel = document.querySelector(`[data-index="${index}"]`);
-      if (!channel) return;
-      
-      const wasCollapsed = channel.classList.contains('collapsed');
-      // FIXED: Store reference to currentTarget before requestAnimationFrame
-      const headerElement = e.currentTarget;
-      
-      // FIXED: Use requestAnimationFrame for smooth toggle animation
-      requestAnimationFrame(() => {
-        channel.classList.toggle('collapsed');
-        // FIXED: Use stored reference instead of e.currentTarget
-        if (headerElement) {
-          headerElement.setAttribute('aria-expanded', wasCollapsed ? 'true' : 'false');
-        }
-      });
-    };
-
-    header.addEventListener('click', handleToggle);
-    header.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleToggle(e);
-      }
-    });
-  });
-  
-  // Handle video clicks
-  document.querySelectorAll('.video[data-url]').forEach(video => {
-    const handleVideoOpen = (e) => {
-      if (e.target.closest('.watch-later-btn')) return; // Don't open if clicking watch later button
-      const url = e.currentTarget.getAttribute('data-url');
-      this.openVideo(url);
-    };
-
-    video.addEventListener('click', handleVideoOpen);
-    video.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleVideoOpen(e);
-      }
-    });
-  });
-
-  // Handle watch later buttons
-  document.querySelectorAll('.watch-later-btn').forEach(btn => {
-    const handleWatchLater = async (e) => {
-      e.stopPropagation();
-      const vid = btn.dataset.id;
-      const videoEl = btn.closest('.video');
-      if (!videoEl) return;
-      
-      const videoObj = {
-        id: vid,
-        url: videoEl.getAttribute('data-url'),
-        title: videoEl.querySelector('.video-title')?.textContent || '',
-        published: videoEl.querySelector('.video-published')?.textContent || '',
-        channelTitle: btn.closest('.channel')?.querySelector('.channel-title')?.textContent || ''
+  setupChannelEventListeners() {
+    // Handle channel header clicks and keyboard
+    document.querySelectorAll('[data-toggle]').forEach(header => {
+      const handleToggle = (e) => {
+        const index = e.currentTarget.getAttribute('data-toggle');
+        const channel = document.querySelector(`[data-index="${index}"]`);
+        if (!channel) return;
+        
+        const wasCollapsed = channel.classList.contains('collapsed');
+        // FIXED: Store reference to currentTarget before requestAnimationFrame
+        const headerElement = e.currentTarget;
+        
+        // FIXED: Use requestAnimationFrame for smooth toggle animation
+        requestAnimationFrame(() => {
+          channel.classList.toggle('collapsed');
+          // FIXED: Use stored reference instead of e.currentTarget
+          if (headerElement) {
+            headerElement.setAttribute('aria-expanded', wasCollapsed ? 'true' : 'false');
+          }
+        });
       };
 
-      try {
-        btn.disabled = true;
-        
-        // FIXED: Use requestAnimationFrame for smooth button state updates
-        if (this.watchLaterMap.has(vid)) {
-          await this.removeFromWatchLater(vid);
-          requestAnimationFrame(() => {
-            btn.classList.remove('watch-later-active');
-            btn.setAttribute('aria-pressed', 'false');
-            btn.title = 'Add to Watch Later';
-            btn.textContent = '⏱';
-          });
-        } else {
-          await this.addToWatchLater(videoObj);
-          requestAnimationFrame(() => {
-            btn.classList.add('watch-later-active');
-            btn.setAttribute('aria-pressed', 'true');
-            btn.title = 'Remove from Watch Later';
-            btn.title = 'Remove from Watch Later';
-            btn.textContent = '✓';
-          });
+      header.addEventListener('click', handleToggle);
+      header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleToggle(e);
         }
-      } catch (error) {
-        console.error('Watch Later operation failed:', error);
-        this.showToast('❌ Failed to update Watch Later', 'error');
-      } finally {
-        btn.disabled = false;
-      }
-    };
+      });
+    });
+    
+    // Handle video clicks
+    document.querySelectorAll('.video[data-url]').forEach(video => {
+      const handleVideoOpen = (e) => {
+        if (e.target.closest('.watch-later-btn') || e.target.closest('.watched-btn')) return; // Don't open if clicking buttons
+        const url = e.currentTarget.getAttribute('data-url');
+        this.openVideo(url);
+      };
 
-    btn.addEventListener('click', handleWatchLater);
-    btn.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleWatchLater(e);
+      video.addEventListener('click', handleVideoOpen);
+      video.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleVideoOpen(e);
+        }
+      });
+    });
+
+    // Handle watch later buttons
+    document.querySelectorAll('.watch-later-btn').forEach(btn => {
+      const handleWatchLater = async (e) => {
+        e.stopPropagation();
+        const vid = btn.dataset.id;
+        const videoEl = btn.closest('.video');
+        if (!videoEl) return;
+        
+        const videoObj = {
+          id: vid,
+          url: videoEl.getAttribute('data-url'),
+          title: videoEl.querySelector('.video-title')?.textContent || '',
+          published: videoEl.querySelector('.video-published')?.textContent || '',
+          channelTitle: btn.closest('.channel')?.querySelector('.channel-title')?.textContent || ''
+        };
+
+        try {
+          btn.disabled = true;
+          
+          // FIXED: Use requestAnimationFrame for smooth button state updates
+          if (this.watchLaterMap.has(vid)) {
+            await this.removeFromWatchLater(vid);
+            requestAnimationFrame(() => {
+              btn.classList.remove('watch-later-active');
+              btn.setAttribute('aria-pressed', 'false');
+              btn.title = 'Add to Watch Later';
+              btn.textContent = '⏱';
+            });
+          } else {
+            await this.addToWatchLater(videoObj);
+            requestAnimationFrame(() => {
+              btn.classList.add('watch-later-active');
+              btn.setAttribute('aria-pressed', 'true');
+              btn.title = 'Remove from Watch Later';
+              btn.textContent = '✓';
+            });
+          }
+        } catch (error) {
+          console.error('Watch Later operation failed:', error);
+          this.showToast('❌ Failed to update Watch Later', 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      btn.addEventListener('click', handleWatchLater);
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleWatchLater(e);
+        }
+      });
+    });
+
+    // NEW: Handle watched buttons
+    document.querySelectorAll('.watched-btn').forEach(btn => {
+      const handleWatched = async (e) => {
+        e.stopPropagation();
+        const vid = btn.dataset.id;
+        const videoEl = btn.closest('.video');
+        if (!videoEl) return;
+
+        try {
+          btn.disabled = true;
+          
+          const isCurrentlyWatched = this.watchedVideos[vid];
+          
+          if (isCurrentlyWatched) {
+            // Remove from watched
+            delete this.watchedVideos[vid];
+            await chrome.storage.local.set({ watchedVideos: this.watchedVideos });
+            
+            requestAnimationFrame(() => {
+              videoEl.classList.remove('watched');
+              btn.classList.remove('watched-active');
+              btn.setAttribute('aria-pressed', 'false');
+              btn.title = 'Mark as watched';
+              btn.textContent = '👁️';
+            });
+            
+            this.showToast('Marked as unwatched');
+          } else {
+            // Mark as watched
+            await this.markVideoWatched(vid);
+            
+            requestAnimationFrame(() => {
+              videoEl.classList.add('watched');
+              btn.classList.add('watched-active');
+              btn.setAttribute('aria-pressed', 'true');
+              btn.title = 'Mark as unwatched';
+              btn.textContent = '✓';
+            });
+            
+            this.showToast('Marked as watched');
+          }
+
+          // Update local state and UI
+          await this.loadWatchedVideos();
+          if (this.hideWatched) {
+            // Re-apply filters if hiding watched videos
+            setTimeout(() => {
+              this.applyFilters();
+              this.updateUI();
+            }, 100);
+          }
+          
+        } catch (error) {
+          console.error('Watched operation failed:', error);
+          this.showToast('❌ Failed to update watched status', 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      btn.addEventListener('click', handleWatched);
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleWatched(e);
+        }
+      });
+    });
+  }
+
+  // NEW: Mark video as watched
+  async markVideoWatched(videoId) {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'markVideoWatched', videoId });
+      if (!response || !response.success) throw new Error(response?.error || 'Failed to mark as watched');
+      
+      // Update local state immediately
+      this.watchedVideos[videoId] = Date.now();
+      
+      return true;
+    } catch (error) {
+      console.error('markVideoWatched failed:', error);
+      throw error;
+    }
+  }
+
+  async openVideo(url) {
+    try {
+      const openMode = this.settings.autoOpen || 'current';
+      
+      if (openMode === 'current') {
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (currentTab) {
+          await chrome.tabs.update(currentTab.id, { url: url });
+        } else {
+          await chrome.tabs.create({ url: url, active: true });
+        }
+      } else if (openMode === 'new') {
+        await chrome.tabs.create({ url: url, active: true });
+      } else if (openMode === 'background') {
+        await chrome.tabs.create({ url: url, active: false });
+      }
+      
+      this.showToast('🎥 Video opened');
+    } catch (error) {
+      console.error('Failed to open video:', error);
+      this.showToast('❌ Failed to open video', 'error');
+    }
+  }
+
+  updateUI() {
+    // FIXED: Batch UI updates in single animation frame to prevent layout thrashing
+    if (this.updateScheduled) return;
+    this.updateScheduled = true;
+    
+    requestAnimationFrame(() => {
+      this.updateStats();
+
+      if (this.view === 'watchLater') {
+        this.renderWatchLaterView();
+      } else {
+        this.updateChannelDisplay();
+      }
+      
+      this.updateScheduled = false;
+    });
+  }
+
+  updateStats() {
+    const totalChannels = this.filteredResults.length;
+    const totalNew = this.filteredResults.reduce((sum, ch) => sum + (ch.newVideos?.length || 0), 0);
+    const totalVideos = this.filteredResults.reduce((sum, ch) => sum + (ch.filteredVideos?.length || 0), 0);
+    const watchedCount = Object.keys(this.watchedVideos).length; // NEW
+    
+    // FIXED: Batch DOM updates and only update if values changed
+    const updates = [
+      ['channelCount', totalChannels],
+      ['newCount', totalNew],
+      ['totalCount', totalVideos],
+      ['watchLaterCount', (this.watchLater || []).length],
+      ['watchedCount', watchedCount] // NEW
+    ];
+
+    let needsUpdate = false;
+    updates.forEach(([id, value]) => {
+      const element = document.getElementById(id);
+      if (element && element.textContent !== value.toString()) {
+        needsUpdate = true;
       }
     });
-  });
-}
 
- async openVideo(url) {
-   try {
-     const openMode = this.settings.autoOpen || 'current';
-     
-     if (openMode === 'current') {
-       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-       if (currentTab) {
-         await chrome.tabs.update(currentTab.id, { url: url });
-       } else {
-         await chrome.tabs.create({ url: url, active: true });
-       }
-     } else if (openMode === 'new') {
-       await chrome.tabs.create({ url: url, active: true });
-     } else if (openMode === 'background') {
-       await chrome.tabs.create({ url: url, active: false });
-     }
-     
-     this.showToast('🎥 Video opened');
-   } catch (error) {
-     console.error('Failed to open video:', error);
-     this.showToast('❌ Failed to open video', 'error');
-   }
- }
+    if (needsUpdate) {
+      requestAnimationFrame(() => {
+        updates.forEach(([id, value]) => {
+          const element = document.getElementById(id);
+          if (element && element.textContent !== value.toString()) {
+            element.textContent = value;
+          }
+        });
+      });
+    }
+  }
 
- updateUI() {
-   // FIXED: Batch UI updates in single animation frame to prevent layout thrashing
-   if (this.updateScheduled) return;
-   this.updateScheduled = true;
-   
-   requestAnimationFrame(() => {
-     this.updateStats();
+  async updateStatus(text = null, type = 'normal') {
+    const statusText = document.getElementById('statusText');
+    const indicator = document.getElementById('indicator');
+    
+    if (text) {
+      // FIXED: Only update if text actually changed
+      if (statusText.textContent !== text) {
+        requestAnimationFrame(() => {
+          statusText.textContent = text;
+        });
+      }
+      
+      const newClass = `indicator ${type}`;
+      if (indicator.className !== newClass) {
+        requestAnimationFrame(() => {
+          indicator.className = newClass;
+        });
+      }
+      return;
+    }
 
-     if (this.view === 'watchLater') {
-       this.renderWatchLaterView();
-     } else {
-       this.updateChannelDisplay();
-     }
-     
-     this.updateScheduled = false;
-   });
- }
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'getStatus' });
+      
+      let newStatusText = 'Status unknown';
+      let newIndicatorClass = 'indicator error';
+      
+      if (result.lastCheck) {
+        const diffMinutes = Math.floor((Date.now() - result.lastCheck) / 60000);
+        if (diffMinutes < 1) {
+          newStatusText = 'Just checked';
+        } else if (diffMinutes < 60) {
+          newStatusText = `Last check: ${diffMinutes}m ago`;
+        } else {
+          const hours = Math.floor(diffMinutes / 60);
+          newStatusText = `Last check: ${hours}h ago`;
+        }
+        newIndicatorClass = result.lastCheckSuccess ? 'indicator' : 'indicator error';
+      } else {
+        newStatusText = 'Never checked';
+        newIndicatorClass = 'indicator error';
+      }
+      
+      // FIXED: Only update if changed to prevent unnecessary reflows
+      let needsUpdate = false;
+      if (statusText.textContent !== newStatusText) {
+        needsUpdate = true;
+      }
+      if (indicator.className !== newIndicatorClass) {
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
+        requestAnimationFrame(() => {
+          if (statusText.textContent !== newStatusText) {
+            statusText.textContent = newStatusText;
+          }
+          if (indicator.className !== newIndicatorClass) {
+            indicator.className = newIndicatorClass;
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to get status:', error);
+      
+      const fallbackText = 'Status unknown';
+      const fallbackClass = 'indicator error';
+      
+      if (statusText.textContent !== fallbackText || indicator.className !== fallbackClass) {
+        requestAnimationFrame(() => {
+          statusText.textContent = fallbackText;
+          indicator.className = fallbackClass;
+        });
+      }
+    }
+  }
 
- updateStats() {
-   const totalChannels = this.filteredResults.length;
-   const totalNew = this.filteredResults.reduce((sum, ch) => sum + (ch.newVideos?.length || 0), 0);
-   const totalVideos = this.filteredResults.reduce((sum, ch) => sum + (ch.filteredVideos?.length || 0), 0);
-   
-   // FIXED: Batch DOM updates and only update if values changed
-   const updates = [
-     ['channelCount', totalChannels],
-     ['newCount', totalNew],
-     ['totalCount', totalVideos],
-     ['watchLaterCount', (this.watchLater || []).length]
-   ];
+  getEmptyState() {
+    if (this.searchQuery) {
+      return `<div class="empty" style="min-height: 200px; height: 200px;">
+        <h3 style="height: 20px; margin-bottom: 8px;">🔍 No Results</h3>
+        <p style="margin-bottom: 16px;">No channels found matching "<strong>${this.escapeHtml(this.searchQuery)}</strong>"</p>
+        <p>Try a different search term or clear the search.</p>
+      </div>`;
+    }
 
-   let needsUpdate = false;
-   updates.forEach(([id, value]) => {
-     const element = document.getElementById(id);
-     if (element && element.textContent !== value.toString()) {
-       needsUpdate = true;
-     }
-   });
+    if (this.showFilter === 'newonly') {
+      return `<div class="empty" style="min-height: 200px; height: 200px;">
+        <h3 style="height: 20px; margin-bottom: 8px;">✨ No New Videos</h3>
+        <p style="margin-bottom: 16px;">No channels have new videos in the selected time range.</p>
+        <p>Try changing the time filter or check for updates.</p>
+      </div>`;
+    }
 
-   if (needsUpdate) {
-     requestAnimationFrame(() => {
-       updates.forEach(([id, value]) => {
-         const element = document.getElementById(id);
-         if (element && element.textContent !== value.toString()) {
-           element.textContent = value;
-         }
-       });
-     });
-   }
- }
+    // NEW: Empty state for when hiding watched videos
+    if (this.hideWatched && this.channelResults.length > 0) {
+      return `<div class="empty" style="min-height: 200px; height: 200px;">
+        <h3 style="height: 20px; margin-bottom: 8px;">👁️‍🗨️ All Videos Watched</h3>
+        <p style="margin-bottom: 16px;">All videos in the current filter have been marked as watched.</p>
+        <p>Uncheck "Hide Watched" or perform a manual check to see more videos.</p>
+      </div>`;
+    }
 
- async updateStatus(text = null, type = 'normal') {
-   const statusText = document.getElementById('statusText');
-   const indicator = document.getElementById('indicator');
-   
-   if (text) {
-     // FIXED: Only update if text actually changed
-     if (statusText.textContent !== text) {
-       requestAnimationFrame(() => {
-         statusText.textContent = text;
-       });
-     }
-     
-     const newClass = `indicator ${type}`;
-     if (indicator.className !== newClass) {
-       requestAnimationFrame(() => {
-         indicator.className = newClass;
-       });
-     }
-     return;
-   }
+    return `<div class="empty" style="min-height: 200px; height: 200px;">
+      <h3 style="height: 20px; margin-bottom: 8px;">📺 No Channels Found</h3>
+      <p style="margin-bottom: 16px;">Create a "Vid" bookmarks folder and add YouTube channel /videos pages.</p>
+      <p>Then click "Check Now" to get started!</p>
+    </div>`;
+  }
 
-   try {
-     const result = await chrome.runtime.sendMessage({ action: 'getStatus' });
-     
-     let newStatusText = 'Status unknown';
-     let newIndicatorClass = 'indicator error';
-     
-     if (result.lastCheck) {
-       const diffMinutes = Math.floor((Date.now() - result.lastCheck) / 60000);
-       if (diffMinutes < 1) {
-         newStatusText = 'Just checked';
-       } else if (diffMinutes < 60) {
-         newStatusText = `Last check: ${diffMinutes}m ago`;
-       } else {
-         const hours = Math.floor(diffMinutes / 60);
-         newStatusText = `Last check: ${hours}h ago`;
-       }
-       newIndicatorClass = result.lastCheckSuccess ? 'indicator' : 'indicator error';
-     } else {
-       newStatusText = 'Never checked';
-       newIndicatorClass = 'indicator error';
-     }
-     
-     // FIXED: Only update if changed to prevent unnecessary reflows
-     let needsUpdate = false;
-     if (statusText.textContent !== newStatusText) {
-       needsUpdate = true;
-     }
-     if (indicator.className !== newIndicatorClass) {
-       needsUpdate = true;
-     }
-     
-     if (needsUpdate) {
-       requestAnimationFrame(() => {
-         if (statusText.textContent !== newStatusText) {
-           statusText.textContent = newStatusText;
-         }
-         if (indicator.className !== newIndicatorClass) {
-           indicator.className = newIndicatorClass;
-         }
-       });
-     }
-   } catch (error) {
-     console.error('Failed to get status:', error);
-     
-     const fallbackText = 'Status unknown';
-     const fallbackClass = 'indicator error';
-     
-     if (statusText.textContent !== fallbackText || indicator.className !== fallbackClass) {
-       requestAnimationFrame(() => {
-         statusText.textContent = fallbackText;
-         indicator.className = fallbackClass;
-       });
-     }
-   }
- }
+  getEmptyWatchLaterState() {
+    return `<div class="empty" style="min-height: 200px; height: 200px;">
+      <h3 style="height: 20px; margin-bottom: 8px;">🕐 Watch Later is Empty</h3>
+      <p style="margin-bottom: 16px;">Add videos to Watch Later by clicking the ⏱ button next to videos.</p>
+      <p>Your saved videos will appear here for easy access.</p>
+    </div>`;
+  }
 
- getEmptyState() {
-   if (this.searchQuery) {
-     return `<div class="empty" style="min-height: 200px; height: 200px;">
-       <h3 style="height: 20px; margin-bottom: 8px;">🔍 No Results</h3>
-       <p style="margin-bottom: 16px;">No channels found matching "<strong>${this.escapeHtml(this.searchQuery)}</strong>"</p>
-       <p>Try a different search term or clear the search.</p>
-     </div>`;
-   }
+  showError(message) {
+    const errorHtml = `<div class="error" style="min-height: 200px; height: 200px; display: flex; align-items: center; justify-content: center;">
+      ${this.escapeHtml(message)}
+    </div>`;
+    
+    requestAnimationFrame(() => {
+      document.getElementById('results').innerHTML = errorHtml;
+    });
+  }
 
-   if (this.showFilter === 'newonly') {
-     return `<div class="empty" style="min-height: 200px; height: 200px;">
-       <h3 style="height: 20px; margin-bottom: 8px;">✨ No New Videos</h3>
-       <p style="margin-bottom: 16px;">No channels have new videos in the selected time range.</p>
-       <p>Try changing the time filter or check for updates.</p>
-     </div>`;
-   }
+  showToast(message, type = 'success') {
+    // FIXED: Remove existing toast to prevent stacking and layout shifts
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
 
-   return `<div class="empty" style="min-height: 200px; height: 200px;">
-     <h3 style="height: 20px; margin-bottom: 8px;">📺 No Channels Found</h3>
-     <p style="margin-bottom: 16px;">Create a "Vid" bookmarks folder and add YouTube channel /videos pages.</p>
-     <p>Then click "Check Now" to get started!</p>
-   </div>`;
- }
+    const toast = document.createElement('div');
+    toast.className = `toast ${type === 'error' ? 'error' : type === 'warning' ? 'warning' : ''}`;
+    toast.textContent = message;
+    toast.style.animation = 'slideIn 0.3s ease';
+    
+    // FIXED: Add toast in animation frame to prevent layout shift
+    requestAnimationFrame(() => {
+      document.body.appendChild(toast);
+    });
+    
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+          }
+        }, 300);
+      }
+    }, 3000);
+  }
 
- getEmptyWatchLaterState() {
-   return `<div class="empty" style="min-height: 200px; height: 200px;">
-     <h3 style="height: 20px; margin-bottom: 8px;">🕒 Watch Later is Empty</h3>
-     <p style="margin-bottom: 16px;">Add videos to Watch Later by clicking the ⏱ button next to videos.</p>
-     <p>Your saved videos will appear here for easy access.</p>
-   </div>`;
- }
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
 
- showError(message) {
-   const errorHtml = `<div class="error" style="min-height: 200px; height: 200px; display: flex; align-items: center; justify-content: center;">
-     ${this.escapeHtml(message)}
-   </div>`;
-   
-   requestAnimationFrame(() => {
-     document.getElementById('results').innerHTML = errorHtml;
-   });
- }
+  renderWatchLaterView() {
+    const resultsContainer = document.getElementById('results');
 
- showToast(message, type = 'success') {
-   // FIXED: Remove existing toast to prevent stacking and layout shifts
-   const existingToast = document.querySelector('.toast');
-   if (existingToast) {
-     existingToast.remove();
-   }
+    if (!this.watchLater || this.watchLater.length === 0) {
+      requestAnimationFrame(() => {
+        resultsContainer.innerHTML = this.getEmptyWatchLaterState();
+      });
+      return;
+    }
 
-   const toast = document.createElement('div');
-   toast.className = `toast ${type === 'error' ? 'error' : ''}`;
-   toast.textContent = message;
-   toast.style.animation = 'slideIn 0.3s ease';
-   
-   // FIXED: Add toast in animation frame to prevent layout shift
-   requestAnimationFrame(() => {
-     document.body.appendChild(toast);
-   });
-   
-   setTimeout(() => {
-     if (toast.parentNode) {
-       toast.style.animation = 'slideOut 0.3s ease';
-       setTimeout(() => {
-         if (toast.parentNode) {
-           toast.parentNode.removeChild(toast);
-         }
-       }, 300);
-     }
-   }, 3000);
- }
+    // FIXED: Use DocumentFragment for efficient rendering with stable dimensions
+    const fragment = document.createDocumentFragment();
+    const tempDiv = document.createElement('div');
+    
+    const html = this.watchLater.map(v => `
+      <div class="watch-later-item" data-id="${this.escapeHtml(v.id)}" style="min-height: 74px; height: auto;">
+        ${v.thumbnail ? 
+          `<img src="${this.escapeHtml(v.thumbnail)}" class="watch-later-thumb" alt="Video thumbnail" loading="lazy" style="width: 88px; height: 50px;">` : 
+          `<div class="watch-later-thumb" aria-hidden="true" style="width: 88px; height: 50px;"></div>`
+        }
+        <div class="watch-later-meta">
+          <div class="watch-later-title" title="${this.escapeHtml(v.title)}">${this.escapeHtml(v.title)}</div>
+          <div class="watch-later-channel" title="Channel: ${this.escapeHtml(v.channelTitle)}">
+            📺 ${this.escapeHtml(v.channelTitle)} • ⏰ ${this.escapeHtml(v.published)}
+          </div>
+        </div>
+        <div class="watch-later-actions">
+          <button class="btn primary watch-later-open" data-url="${this.escapeHtml(v.url)}" title="Open video" style="height: 32px;">
+            ▶️ Open
+          </button>
+          <button class="btn secondary watch-later-remove" data-id="${this.escapeHtml(v.id)}" title="Remove from Watch Later" style="height: 32px; width: 32px;">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `).join('');
 
- escapeHtml(text) {
-   if (!text) return '';
-   const div = document.createElement('div');
-   div.textContent = text;
-   return div.innerHTML;
- }
+    tempDiv.innerHTML = `<div class="watch-later-list">${html}</div>`;
+    
+    while (tempDiv.firstChild) {
+      fragment.appendChild(tempDiv.firstChild);
+    }
+    
+    // FIXED: Single DOM update in animation frame
+    requestAnimationFrame(() => {
+      resultsContainer.innerHTML = '';
+      resultsContainer.appendChild(fragment);
 
- renderWatchLaterView() {
-   const resultsContainer = document.getElementById('results');
+      // FIXED: Attach event listeners after DOM update in next frame
+      requestAnimationFrame(() => {
+        this.setupWatchLaterEventListeners();
+      });
+    });
+  }
 
-   if (!this.watchLater || this.watchLater.length === 0) {
-     requestAnimationFrame(() => {
-       resultsContainer.innerHTML = this.getEmptyWatchLaterState();
-     });
-     return;
-   }
+  setupWatchLaterEventListeners() {
+    document.querySelectorAll('.watch-later-open').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const url = e.currentTarget.dataset.url;
+        this.openVideo(url);
+      });
+    });
 
-   // FIXED: Use DocumentFragment for efficient rendering with stable dimensions
-   const fragment = document.createDocumentFragment();
-   const tempDiv = document.createElement('div');
-   
-   const html = this.watchLater.map(v => `
-     <div class="watch-later-item" data-id="${this.escapeHtml(v.id)}" style="min-height: 74px; height: auto;">
-       ${v.thumbnail ? 
-         `<img src="${this.escapeHtml(v.thumbnail)}" class="watch-later-thumb" alt="Video thumbnail" loading="lazy" style="width: 88px; height: 50px;">` : 
-         `<div class="watch-later-thumb" aria-hidden="true" style="width: 88px; height: 50px;"></div>`
-       }
-       <div class="watch-later-meta">
-         <div class="watch-later-title" title="${this.escapeHtml(v.title)}">${this.escapeHtml(v.title)}</div>
-         <div class="watch-later-channel" title="Channel: ${this.escapeHtml(v.channelTitle)}">
-           📺 ${this.escapeHtml(v.channelTitle)} • ⏰ ${this.escapeHtml(v.published)}
-         </div>
-       </div>
-       <div class="watch-later-actions">
-         <button class="btn primary watch-later-open" data-url="${this.escapeHtml(v.url)}" title="Open video" style="height: 32px;">
-           ▶️ Open
-         </button>
-         <button class="btn secondary watch-later-remove" data-id="${this.escapeHtml(v.id)}" title="Remove from Watch Later" style="height: 32px; width: 32px;">
-           🗑️
-         </button>
-       </div>
-     </div>
-   `).join('');
+    document.querySelectorAll('.watch-later-remove').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.currentTarget.dataset.id;
+        const item = e.currentTarget.closest('.watch-later-item');
+        const title = item?.querySelector('.watch-later-title')?.textContent || 'this video';
+        
+        if (!confirm(`Remove "${title}" from Watch Later?`)) return;
+        
+        try {
+          // FIXED: Smooth button state update
+          requestAnimationFrame(() => {
+            btn.disabled = true;
+          });
+          
+          await this.removeFromWatchLater(id);
+          await this.loadWatchLater();
+          
+          // FIXED: Use requestAnimationFrame for smooth update
+          requestAnimationFrame(() => {
+            this.updateUI();
+          });
+          
+          this.showToast('✅ Removed from Watch Later');
+        } catch (error) {
+          console.error('Failed to remove from watch later', error);
+          this.showToast('❌ Failed to remove video', 'error');
+        } finally {
+          requestAnimationFrame(() => {
+            btn.disabled = false;
+          });
+        }
+      });
+    });
+  }
 
-   tempDiv.innerHTML = `<div class="watch-later-list">${html}</div>`;
-   
-   while (tempDiv.firstChild) {
-     fragment.appendChild(tempDiv.firstChild);
-   }
-   
-   // FIXED: Single DOM update in animation frame
-   requestAnimationFrame(() => {
-     resultsContainer.innerHTML = '';
-     resultsContainer.appendChild(fragment);
+  async addToWatchLater(video) {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'addToWatchLater', video });
+      if (!response || !response.success) throw new Error(response?.error || 'Failed to add');
+      await this.loadWatchLater();
+      
+      // FIXED: Update stats immediately without full UI refresh using animation frame
+      requestAnimationFrame(() => {
+        this.updateStats();
+      });
+      
+      this.showToast('✅ Added to Watch Later');
+    } catch (error) {
+      console.error('addToWatchLater failed:', error);
+      throw error;
+    }
+  }
 
-     // FIXED: Attach event listeners after DOM update in next frame
-     requestAnimationFrame(() => {
-       this.setupWatchLaterEventListeners();
-     });
-   });
- }
+  async removeFromWatchLater(videoId) {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'removeFromWatchLater', videoId });
+      if (!response || !response.success) throw new Error(response?.error || 'Failed to remove');
+      await this.loadWatchLater();
+      
+      // FIXED: Update stats immediately without full UI refresh using animation frame
+      requestAnimationFrame(() => {
+        this.updateStats();
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('removeFromWatchLater failed:', error);
+      throw error;
+    }
+  }
 
- setupWatchLaterEventListeners() {
-   document.querySelectorAll('.watch-later-open').forEach(btn => {
-     btn.addEventListener('click', (e) => {
-       const url = e.currentTarget.dataset.url;
-       this.openVideo(url);
-     });
-   });
-
-   document.querySelectorAll('.watch-later-remove').forEach(btn => {
-     btn.addEventListener('click', async (e) => {
-       const id = e.currentTarget.dataset.id;
-       const item = e.currentTarget.closest('.watch-later-item');
-       const title = item?.querySelector('.watch-later-title')?.textContent || 'this video';
-       
-       if (!confirm(`Remove "${title}" from Watch Later?`)) return;
-       
-       try {
-         // FIXED: Smooth button state update
-         requestAnimationFrame(() => {
-           btn.disabled = true;
-         });
-         
-         await this.removeFromWatchLater(id);
-         await this.loadWatchLater();
-         
-         // FIXED: Use requestAnimationFrame for smooth update
-         requestAnimationFrame(() => {
-           this.updateUI();
-         });
-         
-         this.showToast('✅ Removed from Watch Later');
-       } catch (error) {
-         console.error('Failed to remove from watch later', error);
-         this.showToast('❌ Failed to remove video', 'error');
-       } finally {
-         requestAnimationFrame(() => {
-           btn.disabled = false;
-         });
-       }
-     });
-   });
- }
-
- async addToWatchLater(video) {
-   try {
-     const response = await chrome.runtime.sendMessage({ action: 'addToWatchLater', video });
-     if (!response || !response.success) throw new Error(response?.error || 'Failed to add');
-     await this.loadWatchLater();
-     
-     // FIXED: Update stats immediately without full UI refresh using animation frame
-     requestAnimationFrame(() => {
-       this.updateStats();
-     });
-     
-     this.showToast('✅ Added to Watch Later');
-   } catch (error) {
-     console.error('addToWatchLater failed:', error);
-     throw error;
-   }
- }
-
- async removeFromWatchLater(videoId) {
-   try {
-     const response = await chrome.runtime.sendMessage({ action: 'removeFromWatchLater', videoId });
-     if (!response || !response.success) throw new Error(response?.error || 'Failed to remove');
-     await this.loadWatchLater();
-     
-     // FIXED: Update stats immediately without full UI refresh using animation frame
-     requestAnimationFrame(() => {
-       this.updateStats();
-     });
-     
-     return true;
-   } catch (error) {
-     console.error('removeFromWatchLater failed:', error);
-     throw error;
-   }
- }
-
- // FIXED: Enhanced cleanup when popup closes
- destroy() {
-   // Clear all timeouts to prevent memory leaks
-   if (this.statusUpdateInterval) {
-     clearInterval(this.statusUpdateInterval);
-     this.statusUpdateInterval = null;
-   }
-   if (this.searchDebounce) {
-     clearTimeout(this.searchDebounce);
-     this.searchDebounce = null;
-   }
-   if (this._filterUpdateTimeout) {
-     clearTimeout(this._filterUpdateTimeout);
-     this._filterUpdateTimeout = null;
-   }
-   if (this._displayUpdateTimeout) {
-     clearTimeout(this._displayUpdateTimeout);
-     this._displayUpdateTimeout = null;
-   }
-   if (this._saveSettingsTimeout) {
-     clearTimeout(this._saveSettingsTimeout);
-     this._saveSettingsTimeout = null;
-   }
-   
-   // Remove any remaining toasts
-   const existingToast = document.querySelector('.toast');
-   if (existingToast) {
-     existingToast.remove();
-   }
-   
-   // Clear any pending updates
-   this.updateScheduled = false;
-   this.pendingUpdates.clear();
-   
-   console.log('PopupController destroyed and cleaned up');
- }
+  // FIXED: Enhanced cleanup when popup closes
+  destroy() {
+    // Clear all timeouts to prevent memory leaks
+    if (this.statusUpdateInterval) {
+      clearInterval(this.statusUpdateInterval);
+      this.statusUpdateInterval = null;
+    }
+    if (this.searchDebounce) {
+      clearTimeout(this.searchDebounce);
+      this.searchDebounce = null;
+    }
+    if (this._filterUpdateTimeout) {
+      clearTimeout(this._filterUpdateTimeout);
+      this._filterUpdateTimeout = null;
+    }
+    if (this._displayUpdateTimeout) {
+      clearTimeout(this._displayUpdateTimeout);
+      this._displayUpdateTimeout = null;
+    }
+    if (this._saveSettingsTimeout) {
+      clearTimeout(this._saveSettingsTimeout);
+      this._saveSettingsTimeout = null;
+    }
+    
+    // Remove any remaining toasts
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+    
+    // Clear any pending updates
+    this.updateScheduled = false;
+    this.pendingUpdates.clear();
+    
+    console.log('PopupController destroyed and cleaned up');
+  }
 }

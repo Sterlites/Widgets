@@ -21,7 +21,7 @@
         📺 Channels
       </button>
       <button id="tabWatchLater" class="tab" role="tab" aria-selected="false" aria-controls="results">
-        🕒 Watch Later
+        🕐 Watch Later
       </button>
     </div>
 
@@ -38,7 +38,7 @@
     </select>
 
     <select id="sortBy" aria-label="Sort channels" title="Sort channels by">
-      <option value="name">📝 Name</option>
+      <option value="name">🔤 Name</option>
       <option value="new">✨ New Videos</option>
       <option value="activity">⚡ Activity</option>
     </select>
@@ -49,6 +49,15 @@
     </select>
 
     <input type="search" id="search" placeholder="🔍 Search channels..." aria-label="Search channels" title="Search channels by name">
+
+    <!-- NEW: Watched video controls -->
+    <label id="hideWatched" title="Hide videos marked as watched">
+      <input type="checkbox" id="hideWatchedCheckbox"> 👁️‍🗨️ Hide Watched
+    </label>
+
+    <button id="clearWatched" class="btn warning" title="Clear all watched video flags">
+      🔄 Clear Watched
+    </button>
   </div>
 
   <div class="stats" id="stats" aria-live="polite">
@@ -65,8 +74,13 @@
       <span>Total: <strong id="totalCount">0</strong></span>
     </div>
     <div class="stat-item">
-      <span class="stat-icon">🕒</span>
+      <span class="stat-icon">🕐</span>
       <span>Watch Later: <strong id="watchLaterCount">0</strong></span>
+    </div>
+    <!-- NEW: Watched videos count -->
+    <div class="stat-item">
+      <span class="stat-icon">👁️</span>
+      <span>Watched: <strong id="watchedCount">0</strong></span>
     </div>
   </div>
 
@@ -108,6 +122,16 @@
           <option value="new">New Tab</option>
           <option value="background">Background Tab</option>
         </select>
+      </div>
+      
+      <!-- NEW: Watched video settings -->
+      <div class="setting">
+        <label>
+          👁️ Watched Video Tracking
+        </label>
+        <button id="resetWatched" class="btn secondary" title="Reset all watched video flags">
+          🔄 Reset All
+        </button>
       </div>
       
       <div class="setting">

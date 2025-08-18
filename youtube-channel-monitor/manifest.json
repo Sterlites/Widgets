@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
   "name": "YouTube Channel Monitor",
-  "version": "1.2.0",
-  "description": "Monitor YouTube channels for new videos with enhanced features and improved UX",
+  "version": "1.4.0",
+  "description": "Monitor YouTube channels for new videos with enhanced stability, RSS support, improved UX, and watched video tracking",
   "permissions": [
     "bookmarks",
     "storage",
     "alarms",
     "tabs",
     "notifications",
-    "activeTab"
+    "contextMenus"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -21,7 +21,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "YouTube Channel Monitor - Check for new videos",
+    "default_title": "YouTube Channel Monitor",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -36,18 +36,25 @@
   },
   "commands": {
     "check-now": {
-      "suggested_key": { 
+      "suggested_key": {
         "default": "Ctrl+Shift+Y",
-        "mac": "Command+Shift+Y" 
+        "mac": "Command+Shift+Y"
       },
       "description": "Check for new videos now"
     },
     "toggle-popup": {
-      "suggested_key": { 
+      "suggested_key": {
         "default": "Alt+Shift+Y",
-        "mac": "Alt+Shift+Y" 
+        "mac": "Alt+Shift+Y"
       },
       "description": "Open YouTube Channel Monitor popup"
+    },
+    "toggle-hide-watched": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+H",
+        "mac": "Command+Shift+H"
+      },
+      "description": "Toggle hide watched videos"
     }
   },
   "content_security_policy": {
