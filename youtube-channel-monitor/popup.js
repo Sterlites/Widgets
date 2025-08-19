@@ -292,10 +292,20 @@ this.updateUI();
 applyFilters(){
 const ts=Date.now()-({'1hour':36e5,'6hour':216e5,'12hour':432e5,'1day':864e5,'1week':6048e5,'1month':2592e6}[this.timeFilter]||864e5);
 this.filteredResults=this.channelResults.map(ch=>{
-if(ch.error||(this.searchQuery&&!ch.channelTitle.toLowerCase().includes(this.searchQuery)))return null;
-let fVids=(ch.totalVideos||[]).filter(v=>v.publishedTimestamp>=ts);
-if(this.hideWatched)fVids=fVids.filter(v=>!this.watchedVideos[v.id]);
-return{...ch,filteredVideos:fVids};
+if(ch.error)return null;
+let vids=(ch.totalVideos||[]).filter(v=>v.publishedTimestamp>=ts);
+if(this.hideWatched)vids=vids.filter(v=>!this.watchedVideos[v.id]);
+if(this.searchQuery){
+  const q=this.searchQuery;
+  const channelMatches=(ch.channelTitle||'').toLowerCase().includes(q);
+  const titleMatchedVids=vids.filter(v=>(v.title||'').toLowerCase().includes(q));
+  if(!channelMatches){
+    // Only include channel if some video titles match; then only show matching videos
+    vids=titleMatchedVids;
+    if(vids.length===0) return null;
+  }
+}
+return{...ch,filteredVideos:vids};
 }).filter(ch=>ch&&ch.filteredVideos.length>0);
 }
 
