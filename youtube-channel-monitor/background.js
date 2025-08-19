@@ -10,7 +10,7 @@ class YouTubeChannelMonitor {
 
   async init() {
     try {
-      const { checkInterval = this.config.CHECK_INTERVAL } = await this.getStorage(['checkInterval']);
+      const { checkInterval = this.config.CHECK_INTERVAL } = await this.getSync(['checkInterval']);
       await chrome.alarms.clear('checkChannels');
       await chrome.alarms.create('checkChannels', { periodInMinutes: checkInterval });
       this.setupListeners();
@@ -25,19 +25,32 @@ class YouTubeChannelMonitor {
 
   setupListeners() {
     chrome.alarms.onAlarm.addListener(alarm => alarm.name === 'checkChannels' && this.checkAllChannels(false));
-    chrome.storage.onChanged.addListener(async changes => {
-      if (changes.checkInterval) {
+    chrome.storage.onChanged.addListener(async (changes, areaName) => {
+      if (areaName === 'sync' && changes.checkInterval) {
         const newInterval = changes.checkInterval.newValue;
-        await chrome.alarms.clear('checkChannels');
-        await chrome.alarms.create('checkChannels', { periodInMinutes: newInterval });
+        if (typeof newInterval === 'number' && newInterval > 0) {
+          await chrome.alarms.clear('checkChannels');
+          await chrome.alarms.create('checkChannels', { periodInMinutes: newInterval });
+        }
       }
     });
-    chrome.commands.onCommand.addListener(command => command === 'check-now' && this.checkAllChannels(true));
+    chrome.commands.onCommand.addListener(async (command) => {
+      if (command === 'check-now') {
+        this.checkAllChannels(true);
+      } else if (command === 'toggle-hide-watched') {
+        const { hideWatched = false } = await this.getSync(['hideWatched']);
+        const newVal = !hideWatched;
+        await this.setSync({ hideWatched: newVal });
+        try { chrome.runtime.sendMessage({ type: 'announce', message: `Hide watched: ${newVal ? 'On' : 'Off'}` }); } catch {}
+      }
+    });
     chrome.runtime.onStartup.addListener(() => this.updateStatus());
   }
 
   getStorage(keys) { return new Promise(resolve => chrome.storage.local.get(keys, result => resolve(result))); }
   setStorage(data) { return new Promise(resolve => chrome.storage.local.set(data, () => resolve())); }
+  getSync(keys) { return new Promise(resolve => chrome.storage.sync.get(keys, result => resolve(result))); }
+  setSync(data) { return new Promise(resolve => chrome.storage.sync.set(data, () => resolve())); }
 
   async findVidFolder() {
     return new Promise(resolve => {
@@ -150,7 +163,7 @@ class YouTubeChannelMonitor {
 
   hashUrl(url) { let h = 0; for (let i = 0; i < url.length; i++) h = ((h << 5) - h) + url.charCodeAt(i), h &= h; return Math.abs(h).toString(); }
 
-  async getTimeFilter() { try { const r = await this.getStorage(['timeFilter']); return r.timeFilter || '1day'; } catch { return '1day'; } }
+  async getTimeFilter() { try { const r = await this.getSync(['timeFilter']); return r.timeFilter || '1day'; } catch { return '1day'; } }
 
   async getTimeFilterTimestamp(filter) {
     const now = Date.now();
@@ -167,10 +180,11 @@ class YouTubeChannelMonitor {
 
   async showNotification(title, message, channelResults) {
     try {
-      const settings = await this.getStorage(['notifications']);
+      const settings = await this.getSync(['notifications', 'mutedChannels']);
       if (!settings.notifications) return;
       const totalNew = channelResults.reduce((sum, ch) => sum + (ch.newVideos?.length || 0), 0);
-      const channelsWithNew = channelResults.filter(ch => ch.newVideos?.length > 0);
+      const mutedSet = new Set(settings.mutedChannels || []);
+      const channelsWithNew = channelResults.filter(ch => ch.newVideos?.length > 0 && !mutedSet.has(this.hashUrl(ch.channelUrl)));
       let notificationMessage = message;
       if (channelsWithNew.length > 0) {
         notificationMessage = `${channelsWithNew[0].newVideos[0].title} - ${channelsWithNew[0].channelTitle}`;
@@ -195,6 +209,7 @@ class YouTubeChannelMonitor {
       if (!bookmarks.length) { await this.storeChannelResults([]); await this.updateBadge(''); return; }
       const timeFilter = await this.getTimeFilter();
       const filterTimestamp = await this.getTimeFilterTimestamp(timeFilter);
+      const { mutedChannels = [] } = await this.getSync(['mutedChannels']);
       const watchedVideos = await this.getWatchedVideos();
       let totalNewVideos = 0, successfulChannels = 0;
       const channelResults = await Promise.all(bookmarks.map(async bookmark => {
@@ -289,6 +304,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     addToWatchLater: () => monitor.addToWatchLater(message.video),
     removeFromWatchLater: () => monitor.removeFromWatchLater(message.videoId),
     clearWatchLater: () => monitor.clearWatchLater(),
+    removeManyFromWatchLater: async () => {
+      try {
+        const ids = message.videoIds || [];
+        if (!Array.isArray(ids) || !ids.length) return { success: true, removed: 0 };
+        const existing = await monitor.getWatchLaterVideos();
+        const idSet = new Set(ids);
+        const filtered = existing.filter(v => !idSet.has(v.id));
+        await monitor.setStorage({ watchLaterVideos: filtered });
+        return { success: true, removed: existing.length - filtered.length };
+      } catch (e) { return { success: false, error: e.message }; }
+    },
+    checkChannelNow: async () => {
+      try {
+        const { url, title } = message.channel || {};
+        if (!url) throw new Error('Missing channel url');
+        const timeFilter = await monitor.getTimeFilter();
+        const filterTimestamp = await monitor.getTimeFilterTimestamp(timeFilter);
+        const watchedVideos = await monitor.getWatchedVideos();
+        const result = await monitor.processChannel({ url, title }, filterTimestamp, watchedVideos, false);
+        const data = await monitor.getStorage(['channelResults']);
+        let list = data.channelResults || [];
+        const idx = list.findIndex(ch => ch.channelUrl === url);
+        if (idx >= 0) list[idx] = result; else list.unshift(result);
+        await monitor.storeChannelResults(list, timeFilter);
+        return { success: true, result };
+      } catch (e) { return { success: false, error: e.message }; }
+    },
   };
 
   const action = actions[message.action];
@@ -300,9 +342,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
+    await monitor.setSync({
+      checkInterval: 15, timeFilter: '1day', notifications: false, autoOpen: 'current', hideWatched: false,
+      mutedChannels: []
+    });
     await monitor.setStorage({
-      checkInterval: 15, timeFilter: '1day', notifications: false, autoOpen: 'current', installDate: Date.now(),
-      watchLaterVideos: [], watchedVideos: {}, hideWatched: false,
+      installDate: Date.now(), watchLaterVideos: [], watchedVideos: {},
       features: { watchedVideoTracking: true }
     });
     setTimeout(() => chrome.notifications.create({
@@ -311,6 +356,15 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }), 2000);
   } else if (details.reason === 'update') {
     const existing = await monitor.getStorage(['watchedVideos']);
-    if (!existing.watchedVideos) await monitor.setStorage({ watchedVideos: {}, hideWatched: false });
+    if (!existing.watchedVideos) await monitor.setStorage({ watchedVideos: {} });
+    const prefs = await monitor.getSync(['hideWatched', 'checkInterval', 'timeFilter', 'notifications', 'autoOpen', 'mutedChannels']);
+    const toSet = {};
+    if (prefs.hideWatched === undefined) toSet.hideWatched = false;
+    if (prefs.checkInterval === undefined) toSet.checkInterval = 15;
+    if (prefs.timeFilter === undefined) toSet.timeFilter = '1day';
+    if (prefs.notifications === undefined) toSet.notifications = false;
+    if (prefs.autoOpen === undefined) toSet.autoOpen = 'current';
+    if (!Array.isArray(prefs.mutedChannels)) toSet.mutedChannels = [];
+    if (Object.keys(toSet).length) await monitor.setSync(toSet);
   }
 });

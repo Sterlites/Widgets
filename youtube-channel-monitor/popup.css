@@ -293,6 +293,14 @@ input[type="search"] { width: 100%; }
 .wl-ch { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 .wl-a { display: flex; gap: 6px; }
 
+/* Watched View (mirrors Watch Later styles) */
+.wv-item { display: flex; align-items: center; gap: 12px; padding: 8px; margin-bottom: 8px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); }
+.wv-thumb { width: 100px; height: 56px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; }
+.wv-meta { flex: 1; min-width: 0; }
+.wv-t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+.wv-ch { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.wv-a { display: flex; gap: 6px; }
+
 /* Empty / Loading States */
 .empty, .loading { padding: 40px; text-align: center; color: var(--text-secondary); }
 .empty-icon { font-size: 40px; margin-bottom: 16px; }
