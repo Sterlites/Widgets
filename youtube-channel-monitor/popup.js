@@ -202,7 +202,7 @@ this.updateUI();
 }
 
 applyFilters(){
-const ts=Date.now()-({'1hour':36e5,'1day':864e5,'1week':6048e5,'1month':2592e6}[this.timeFilter]||864e5);
+const ts=Date.now()-({'1hour':36e5,'6hour':216e5,'12hour':432e5,'1day':864e5,'1week':6048e5,'1month':2592e6}[this.timeFilter]||864e5);
 this.filteredResults=this.channelResults.map(ch=>{
 if(ch.error||(this.searchQuery&&!ch.channelTitle.toLowerCase().includes(this.searchQuery)))return null;
 let fVids=(ch.totalVideos||[]).filter(v=>v.publishedTimestamp>=ts);
