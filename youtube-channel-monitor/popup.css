@@ -125,7 +125,7 @@ body {
 #btn-check .icon-loader { display: none; }
 #btn-check[disabled] .icon-loader { display: block; }
 
-.filter-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.filter-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .filter-controls.hidden { display: none; }
 #f-search { grid-column: 1 / -1; }
 
@@ -156,13 +156,17 @@ input[type="search"] { width: 100%; }
 
 /* Settings */
 #btn-settings { 
-  padding: 7px; svg { width: 16px; height: 16px; }; color:red;
+  padding: 7px; 
+}
+#btn-settings svg { 
+  width: 16px; 
+  height: 16px; 
 }
 .settings-panel {
   padding: 14px;
   display: grid;
   gap: 10px;
-  background-color:red ;
+  background-color: var(--bg-primary);
   border-radius: var(--radius-lg);
   margin-top: 4px;
 }
@@ -180,6 +184,23 @@ input[type="search"] { width: 100%; }
 }
 .set-i .btn {
   padding: 5px 10px;
+}
+
+/* Toggle All Button Styling */
+#btn-toggle-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+#btn-toggle-all svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 /* Stats Bar */
