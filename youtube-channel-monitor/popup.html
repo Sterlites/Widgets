@@ -1,73 +1,69 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <link rel="stylesheet" href="popup.css">
-    <title>YT Channel Monitor</title>
+<meta charset="utf-8">
+<link rel="stylesheet" href="popup.css">
+<title>YT Channel Monitor</title>
 </head>
 <body>
-    <header class="header">
-        <div class="header-title">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.582 6.186a2.533 2.533 0 0 0-1.76-1.784C18.25 4 12 4 12 4s-6.25 0-7.822.402a2.533 2.533 0 0 0-1.76 1.784C2 7.778 2 12 2 12s0 4.222.418 5.814a2.533 2.533 0 0 0 1.76 1.784C5.75 20 12 20 12 20s6.25 0 7.822-.402a2.533 2.533 0 0 0 1.76-1.784C22 16.222 22 12 22 12s0-4.222-.418-5.814zM10 15.464V8.536L16 12l-6 3.464z"></path></svg>
-            <span>Channel Monitor</span>
-        </div>
-        <div class="status" id="stat">
-            <span class="indicator" id="ind"></span>
-            <span id="st-text">Loading...</span>
-        </div>
-    </header>
-
-    <div class="controls-wrapper">
-        <div class="top-controls">
-            <div class="tab-bar" role="tablist">
-                <button id="tab-ch" class="tab active" role="tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3zm2 2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6z"></path></svg>
-                    Channels
-                </button>
-                <button id="tab-wl" class="tab" role="tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5z" clip-rule="evenodd"></path></svg>
-                    Watch Later
-                </button>
-                <button id="tab-wv" class="tab" role="tab" title="Watched">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3.5C5 3.5 1.73 7.11.46 9.18a1.25 1.25 0 0 0 0 1.64C1.73 12.89 5 16.5 10 16.5s8.27-3.61 9.54-5.68a1.25 1.25 0 0 0 0-1.64C18.27 7.11 15 3.5 10 3.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" clip-rule="evenodd"/></svg>
-                    Watched
-                </button>
-            </div>
-            <button id="btn-check" class="btn primary">
-                 <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M16.03 4.47a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06L9 10.94l6.03-5.97a.75.75 0 0 1 .94.06Z" clip-rule="evenodd" /></svg>
-                 <svg class="icon-loader" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.312a.75.75 0 0 1 0-1.062l1.98-1.98a.75.75 0 0 1 1.06 0V3.75a.75.75 0 0 1-1.5 0v-.379l-1.98 1.98a.75.75 0 0 1-1.06 0ZM4.688 8.688a.75.75 0 0 1 0 1.062l-1.98 1.98a.75.75 0 0 1-1.06 0V16.25a.75.75 0 0 1 1.5 0v.379l1.98-1.98a.75.75 0 0 1 1.06 0ZM11.312 4.688a.75.75 0 0 1 1.062 0l1.98 1.98a.75.75 0 0 1 0 1.06V11.25a.75.75 0 0 1-1.5 0v.379l-1.98-1.98a.75.75 0 0 1 0-1.062ZM8.688 15.312a.75.75 0 0 1-1.062 0l-1.98-1.98a.75.75 0 0 1 0-1.06V8.75a.75.75 0 0 1 1.5 0v-.379l1.98 1.98a.75.75 0 0 1 0 1.062Z" clip-rule="evenodd"></path></svg>
-                Check Now
-            </button>
-            <button id="btn-settings" class="btn" title="Settings" >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 0 1-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 0 1 .947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 0 1 2.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 0 1 2.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 0 1-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 0 1-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 0 1-2.287-.947ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd" /></svg>
-            </button>
-        </div>
-        <div class="filter-controls" id="filter-controls">
-            <input type="search" id="f-search" placeholder="Search channels or videos...">
-            <select id="f-time"><option value="1hour">Last 1 hour</option><option value="6hour">Last 6 hours</option><option value="12hour">Last 12 hours</option><option value="1day">Last 24 hours</option><option value="1week">Last week</option><option value="1month">Last month</option><option value="sincelastvisit">Since last visit</option></select>
-            <select id="f-sort"><option value="activity">⚡ Activity</option><option value="new">✨ New Videos</option><option value="name">🔤 Name</option></select>
-            <button id="btn-toggle-all" class="btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-8.5a.75.75 0 0 0-.75-.75h-8.5zm0-1.5A2.25 2.25 0 0 0 2 6.25v8.5A2.25 2.25 0 0 0 4.25 17h8.5A2.25 2.25 0 0 0 15 14.75v-8.5A2.25 2.25 0 0 0 12.75 4h-8.5zM8 6a.75.75 0 0 1 .75.75v2.25H11a.75.75 0 0 1 0 1.5H8.75v2.25a.75.75 0 0 1-1.5 0v-2.25H5a.75.75 0 0 1 0-1.5h2.25V6.75A.75.75 0 0 1 8 6z" clip-rule="evenodd"></path></svg>
-                Expand All
-            </button>
-        </div>
-        <div id="settings-panel" class="settings-panel hidden">
-            <div class="set-i"><label for="set-int">Check Interval:</label><select id="set-int"><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
-            <div class="set-i"><label for="set-open">Open Videos In:</label><select id="set-open"><option value="current">Current Tab</option><option value="new">New Tab</option><option value="background">Background Tab</option></select></div>
-            <div class="set-i"><label for="f-hw-cb">Hide Watched Videos</label><input type="checkbox" id="f-hw-cb"></div>
-            <div class="set-i"><label for="set-notif">Desktop Notifications</label><input type="checkbox" id="set-notif"></div>
-            <div class="set-i"><label>Actions</label><div style="display:flex; gap: 8px;"><button id="btn-cw" class="btn warning">Clear Watched</button><button id="set-cd" class="btn">Clear Cache</button></div></div>
-        </div>
-    </div>
-
-    <div class="s-bar" id="s-bar" aria-live="polite">
-        <div class="s-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3z"></path></svg>Channels: <strong id="s-ch">0</strong></div>
-        <div class="s-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-11.25a.75.75 0 0 0-1.5 0v2.5h-2.5a.75.75 0 0 0 0 1.5h2.5v2.5a.75.75 0 0 0 1.5 0v-2.5h2.5a.75.75 0 0 0 0-1.5h-2.5v-2.5Z" clip-rule="evenodd" /></svg>New: <strong id="s-new">0</strong></div>
-        <div class="s-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM10 8.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM11.5 15.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z" /></svg>Total: <strong id="s-total">0</strong></div>
-    </div>
-
-    <main id="res" class="res"></main>
-
-    <script src="popup.js"></script>
+<header class="header">
+<div class="header-title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.582 6.186a2.533 2.533 0 0 0-1.76-1.784C18.25 4 12 4 12 4s-6.25 0-7.822.402a2.533 2.533 0 0 0-1.76 1.784C2 7.778 2 12 2 12s0 4.222.418 5.814a2.533 2.533 0 0 0 1.76 1.784C5.75 20 12 20 12 20s6.25 0 7.822-.402a2.533 2.533 0 0 0 1.76-1.784C22 16.222 22 12 22 12s0-4.222-.418-5.814zM10 15.464V8.536L16 12l-6 3.464z"></path></svg>
+<span>Channel Monitor</span>
+</div>
+<div class="status" id="stat">
+<span class="indicator" id="ind"></span>
+<span id="st-text">Loading...</span>
+</div>
+</header>
+<div class="controls-wrapper">
+<div class="top-controls">
+<div class="tab-bar" role="tablist">
+<button id="tab-ch" class="tab active" role="tab">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3zm2 2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6z"></path></svg>
+Channels
+</button>
+<button id="tab-wl" class="tab" role="tab">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5z" clip-rule="evenodd"></path></svg>
+Watch Later
+</button>
+<button id="tab-wv" class="tab" role="tab" title="Watched">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3.5C5 3.5 1.73 7.11.46 9.18a1.25 1.25 0 0 0 0 1.64C1.73 12.89 5 16.5 10 16.5s8.27-3.61 9.54-5.68a1.25 1.25 0 0 0 0-1.64C18.27 7.11 15 3.5 10 3.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" clip-rule="evenodd"/></svg>
+Watched
+</button>
+</div>
+<button id="btn-check" class="btn primary">
+<svg class="icon-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M16.03 4.47a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06L9 10.94l6.03-5.97a.75.75 0 0 1 .94.06Z" clip-rule="evenodd"/></svg>
+<svg class="icon-loader" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.312a.75.75 0 0 1 0-1.062l1.98-1.98a.75.75 0 0 1 1.06 0V3.75a.75.75 0 0 1-1.5 0v-.379l-1.98 1.98a.75.75 0 0 1-1.06 0ZM4.688 8.688a.75.75 0 0 1 0 1.062l-1.98 1.98a.75.75 0 0 1-1.06 0V16.25a.75.75 0 0 1 1.5 0v.379l1.98-1.98a.75.75 0 0 1 1.06 0ZM11.312 4.688a.75.75 0 0 1 1.062 0l1.98 1.98a.75.75 0 0 1 0 1.06V11.25a.75.75 0 0 1-1.5 0v.379l-1.98-1.98a.75.75 0 0 1 0-1.062ZM8.688 15.312a.75.75 0 0 1-1.062 0l-1.98-1.98a.75.75 0 0 1 0-1.06V8.75a.75.75 0 0 1 1.5 0v-.379l1.98 1.98a.75.75 0 0 1 0 1.062Z" clip-rule="evenodd"></path></svg>
+Check Now
+</button>
+<button id="btn-settings" class="btn" title="Settings">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 0 1-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 0 1 .947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 0 1 2.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 0 1 2.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 0 1-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 0 1-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 0 1-2.287-.947ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/></svg>
+</button>
+</div>
+<div class="filter-controls" id="filter-controls">
+<input type="search" id="f-search" placeholder="Search channels or videos...">
+<select id="f-time"><option value="1hour">Last 1 hour</option><option value="6hour">Last 6 hours</option><option value="12hour">Last 12 hours</option><option value="1day">Last 24 hours</option><option value="1week">Last week</option><option value="1month">Last month</option><option value="sincelastvisit">Since last visit</option></select>
+<select id="f-sort"><option value="activity">⚡ Activity</option><option value="new">✨ New Videos</option><option value="name">🔤 Name</option></select>
+<button id="btn-toggle-all" class="btn">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-8.5a.75.75 0 0 0-.75-.75h-8.5zm0-1.5A2.25 2.25 0 0 0 2 6.25v8.5A2.25 2.25 0 0 0 4.25 17h8.5A2.25 2.25 0 0 0 15 14.75v-8.5A2.25 2.25 0 0 0 12.75 4h-8.5zM8 6a.75.75 0 0 1 .75.75v2.25H11a.75.75 0 0 1 0 1.5H8.75v2.25a.75.75 0 0 1-1.5 0v-2.25H5a.75.75 0 0 1 0-1.5h2.25V6.75A.75.75 0 0 1 8 6z" clip-rule="evenodd"></path></svg>
+Expand All
+</button>
+</div>
+<div id="settings-panel" class="settings-panel hidden">
+<div class="set-i"><label for="set-int">Check Interval:</label><select id="set-int"><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
+<div class="set-i"><label for="set-open">Open Videos In:</label><select id="set-open"><option value="current">Current Tab</option><option value="new">New Tab</option><option value="background">Background Tab</option></select></div>
+<div class="set-i"><label for="f-hw-cb">Hide Watched Videos</label><input type="checkbox" id="f-hw-cb"></div>
+<div class="set-i"><label for="set-notif">Desktop Notifications</label><input type="checkbox" id="set-notif"></div>
+<div class="set-i"><label>Actions</label><div style="display:flex;gap:8px;"><button id="btn-cw" class="btn warning">Clear Watched</button><button id="set-cd" class="btn">Clear Cache</button></div></div>
+</div>
+</div>
+<div class="s-bar" id="s-bar" aria-live="polite">
+<div class="s-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3z"></path></svg>Channels: <strong id="s-ch">0</strong></div>
+<div class="s-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-11.25a.75.75 0 0 0-1.5 0v2.5h-2.5a.75.75 0 0 0 0 1.5h2.5v2.5a.75.75 0 0 0 1.5 0v-2.5h2.5a.75.75 0 0 0 0-1.5h-2.5v-2.5Z" clip-rule="evenodd"/></svg>New: <strong id="s-new">0</strong></div>
+<div class="s-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM10 8.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM11.5 15.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z"/></svg>Total: <strong id="s-total">0</strong></div>
+</div>
+<main id="res" class="res"></main>
+<script src="popup.js"></script>
 </body>
 </html>
