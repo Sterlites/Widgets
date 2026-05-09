@@ -134,7 +134,11 @@ document.getElementById('btn-dl-uilog').addEventListener('click',()=>{
 this.addUiLog('INFO','Downloading UI log');
 const blob=new Blob([JSON.stringify(this.uiLogs,null,2)],{type:'application/json'});
 const url=URL.createObjectURL(blob);
+if(chrome.downloads){
 chrome.downloads.download({url,filename:`yt-monitor-ui-log-${new Date().toISOString().replace(/[:.]/g,'-')}.json`});
+}else{
+const a=document.createElement('a');a.href=url;a.download=`yt-monitor-ui-log-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();
+}
 });
 this.D.res.addEventListener('change',(e)=>{
 const t=e.target;
@@ -196,6 +200,15 @@ this.fltRes=this.chRes.map(ch=>{
 if(ch.error)return null;
 let vids=(ch.totalVideos||[]).filter(v=>{
 const match=v.pubTS>=ts;
+if(match && this.uiLogs.length < 1000){
+this.addUiLog('DEBUG', `Video passed filter: ${v.title}`, {
+channel: ch.channelTitle,
+published: v.published,
+pubTS: v.pubTS,
+filterTS: ts,
+diffMin: Math.round((v.pubTS - ts)/6e4)
+});
+}
 return match;
 });
 if(this.hideW)vids=vids.filter(v=>!this.wv[v.id]);
@@ -204,9 +217,6 @@ const q=this.srchQ;
 const chMatch=(ch.channelTitle||'').toLowerCase().includes(q);
 const tMatchVids=vids.filter(v=>(v.title||'').toLowerCase().includes(q));
 if(!chMatch){vids=tMatchVids;if(vids.length===0)return null;}
-}
-if(vids.length>0 && this.uiLogs.length < 500){
-this.addUiLog('DEBUG',`Channel ${ch.channelTitle}: ${vids.length}/${ch.totalVideos?.length} vids pass filter. First v.pubTS=${vids[0].pubTS}`);
 }
 return{...ch,filteredVideos:vids};
 }).filter(ch=>ch&&ch.filteredVideos.length>0);

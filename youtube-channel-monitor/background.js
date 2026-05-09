@@ -135,15 +135,15 @@ return{id:vr.videoId,title:t.trim(),url:`https://www.youtube.com/watch?v=${vr.vi
 }catch{return null;}
 }
 parsePT(tx){
-if(!tx)return Date.now()-864e5;
+if(!tx||tx.toLowerCase().includes('recently')||tx.toLowerCase().includes('just now'))return Date.now();
 const now=Date.now();
-const m=tx.toLowerCase().trim().match(/(?:streamed|premiered)?\s*(\d+)\s*(second|sec|minute|min|hour|hr|day|d|week|wk|month|mo|year|yr)s?\s+ago/);
+const m=tx.toLowerCase().trim().match(/(?:streamed|premiered)?\s*(\d+)\s*(second|sec|s|minute|min|m|hour|hr|h|day|d|week|wk|w|month|mo|year|yr)s?\s+ago/);
 if(m){
 const[,amt,u]=m;
-const mul={second:1e3,sec:1e3,minute:6e4,min:6e4,hour:36e5,hr:36e5,day:864e5,d:864e5,week:6048e5,wk:6048e5,month:2592e6,mo:2592e6,year:31536e6,yr:31536e6};
+const mul={second:1e3,sec:1e3,s:1e3,minute:6e4,min:6e4,m:6e4,hour:36e5,hr:36e5,h:36e5,day:864e5,d:864e5,week:6048e5,wk:6048e5,w:6048e5,month:2592e6,mo:2592e6,year:31536e6,yr:31536e6};
 return now-parseInt(amt)*(mul[u]||864e5);
 }
-return now-864e5;
+return now-864e6; // Fallback to 10 days ago if totally unknown to avoid false positives in hourly filters
 }
 async getStVids(url){const k=`videos_${this.hash(url)}`;try{const r=await this.gLoc([k]);return r[k]||[];}catch{return[];}}
 async stVids(url,vids){const k=`videos_${this.hash(url)}`;try{await this.sLoc({[k]:vids.slice(0,this.cfg.CACHE)});}catch{}}

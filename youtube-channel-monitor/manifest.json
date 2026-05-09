@@ -3,7 +3,7 @@
 "name":"YouTube Channel Monitor",
 "version":"1.4.0",
 "description":"Monitors YouTube channels for new videos from a bookmarks folder.",
-"permissions":["bookmarks","storage","unlimitedStorage","alarms","tabs","notifications","contextMenus"],
+"permissions":["bookmarks","storage","unlimitedStorage","alarms","tabs","notifications","contextMenus","downloads"],
 "host_permissions":["https://www.youtube.com/*"],
 "background":{"service_worker":"background.js","type":"module"},
 "action":{
