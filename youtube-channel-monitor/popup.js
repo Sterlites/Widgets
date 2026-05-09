@@ -10,6 +10,8 @@ chrome.runtime.onMessage.addListener((msg)=>{if(msg?.type==='announce'&&window.p
 
 class Popup{
 constructor(){
+this.uiLogs=[];
+this.addUiLog=(lvl,msg,det={})=>{this.uiLogs.push({t:new Date().toISOString(),lvl,msg,det});if(this.uiLogs.length>1000)this.uiLogs.shift();};
 this.cacheDOM();
 this.set={};this.chRes=[];this.fltRes=[];this.wl=[];this.wv={};this.wlMap=new Map();this.view='channels';
 this.sort='activity';this.checking=false;this.srchDeb=null;this.updSched=false;this.allExp=false;this.presStates=true;
@@ -22,13 +24,15 @@ this.D={res:g('res'),sbar:g('s-bar'),sCh:g('s-ch'),sNew:g('s-new'),sTotal:g('s-t
 ind:g('ind'),tabCh:g('tab-ch'),tabWl:g('tab-wl'),tabWv:g('tab-wv'),btnCheck:g('btn-check'),fTime:g('f-time'),
 fSort:g('f-sort'),fSearch:g('f-search'),fHwCb:g('f-hw-cb'),btnCw:g('btn-cw'),setInt:g('set-int'),
 setNotif:g('set-notif'),setOpen:g('set-open'),controlSet:[g('filter-controls')],btnSettings:g('btn-settings'),
-settingsPanel:g('settings-panel'),btnToggleAll:g('btn-toggle-all')};
+settingsPanel:g('settings-panel'),btnToggleAll:g('btn-toggle-all'),btnDlLog:g('btn-dl-log')};
 }
 async init(){
+this.addUiLog('INFO','Popup init started');
 this.loading('Initializing...');
 await this.loadSettings();
 await this.refreshData(false);
 this.setupEvt();
+this.addUiLog('INFO','Popup init complete');
 this.updStatus();
 this.statInt=setInterval(()=>!this.checking&&this.updStatus(),3e4);
 }
@@ -122,9 +126,16 @@ if(chH&&!t.closest('.vid'))chH.parentElement.classList.toggle('collapsed');
 });
 btnCw.addEventListener('click',()=>this.clearWV());
 document.getElementById('set-cd').addEventListener('click',()=>this.clearData());
+if(this.D.btnDlLog)this.D.btnDlLog.addEventListener('click',()=>this.downloadScanLog());
 setInt.addEventListener('change',e=>this.saveSetting('checkInterval',parseInt(e.target.value)));
 setNotif.addEventListener('change',e=>this.saveSetting('notifications',e.target.checked));
 setOpen.addEventListener('change',e=>this.saveSetting('autoOpen',e.target.value));
+document.getElementById('btn-dl-uilog').addEventListener('click',()=>{
+this.addUiLog('INFO','Downloading UI log');
+const blob=new Blob([JSON.stringify(this.uiLogs,null,2)],{type:'application/json'});
+const url=URL.createObjectURL(blob);
+chrome.downloads.download({url,filename:`yt-monitor-ui-log-${new Date().toISOString().replace(/[:.]/g,'-')}.json`});
+});
 this.D.res.addEventListener('change',(e)=>{
 const t=e.target;
 if(t.classList.contains('wl-select')){
@@ -149,6 +160,7 @@ const all=t.checked;this.wvSel.clear();
 if(all)this.getWVList().forEach(v=>this.wvSel.add(v.id));
 this.renderWV();
 }});
+this.D.res.addEventListener('error',(e)=>{if(e.target.tagName==='IMG')e.target.style.display='none';},true);
 }
 toggleSettings(){this.D.settingsPanel.classList.toggle('hidden');}
 toggleAll(){
@@ -162,7 +174,7 @@ const btn=this.D.btnToggleAll;
 const[expI,colI]=['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-8.5a.75.75 0 0 0-.75-.75h-8.5zm0-1.5A2.25 2.25 0 0 0 2 6.25v8.5A2.25 2.25 0 0 0 4.25 17h8.5A2.25 2.25 0 0 0 15 14.75v-8.5A2.25 2.25 0 0 0 12.75 4h-8.5zM8 6a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 8 6zm4 0a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 12 6z" clip-rule="evenodd"></path></svg> Expand All','<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-8.5a.75.75 0 0 0-.75-.75h-8.5zm0-1.5A2.25 2.25 0 0 0 2 6.25v8.5A2.25 2.25 0 0 0 4.25 17h8.5A2.25 2.25 0 0 0 15 14.75v-8.5A2.25 2.25 0 0 0 12.75 4h-8.5zM8 6a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 8 6zm4 0a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 12 6z" clip-rule="evenodd"></path></svg> Collapse All'];
 btn.innerHTML=this.allExp?colI:expI;
 }
-handleFilt(key,val){this[key]=val;chrome.storage.sync.set({[key]:val});this.updateUI();}
+handleFilt(key,val){this[key]=val;if(key==='timeFilter')this.tf=val;chrome.storage.sync.set({[key]:val});this.updateUI();}
 saveSetting(key,val){this.set[key]=val;chrome.storage.sync.set({[key]:val});}
 switchView(vw){
 if(this.view===vw)return;
@@ -176,10 +188,16 @@ this.D.settingsPanel.classList.add('hidden');
 this.updateUI();
 }
 applyFilt(){
-const ts=Date.now()-({'1hour':36e5,'6hour':216e5,'12hour':432e5,'1day':864e5,'1week':6048e5,'1month':2592e6}[this.tf]||864e5);
+let ts=Date.now()-864e5;
+if(this.tf==='sincelastvisit')ts=this.lastManual||(Date.now()-864e5);
+else ts=Date.now()-({'1hour':36e5,'6hour':216e5,'12hour':432e5,'1day':864e5,'1week':6048e5,'1month':2592e6}[this.tf]||864e5);
+this.addUiLog('DEBUG',`applyFilt start. tf=${this.tf}, ts=${ts}, chRes=${this.chRes.length}, hideW=${this.hideW}`);
 this.fltRes=this.chRes.map(ch=>{
 if(ch.error)return null;
-let vids=(ch.totalVideos||[]).filter(v=>v.pubTS>=ts);
+let vids=(ch.totalVideos||[]).filter(v=>{
+const match=v.pubTS>=ts;
+return match;
+});
 if(this.hideW)vids=vids.filter(v=>!this.wv[v.id]);
 if(this.srchQ){
 const q=this.srchQ;
@@ -187,8 +205,12 @@ const chMatch=(ch.channelTitle||'').toLowerCase().includes(q);
 const tMatchVids=vids.filter(v=>(v.title||'').toLowerCase().includes(q));
 if(!chMatch){vids=tMatchVids;if(vids.length===0)return null;}
 }
+if(vids.length>0 && this.uiLogs.length < 500){
+this.addUiLog('DEBUG',`Channel ${ch.channelTitle}: ${vids.length}/${ch.totalVideos?.length} vids pass filter. First v.pubTS=${vids[0].pubTS}`);
+}
 return{...ch,filteredVideos:vids};
 }).filter(ch=>ch&&ch.filteredVideos.length>0);
+this.addUiLog('INFO',`applyFilt end. fltRes=${this.fltRes.length} channels`);
 }
 updateUI(){
 if(this.updSched)return;
@@ -282,7 +304,7 @@ const tool=`<div class="wl-toolbar" style="display:flex;align-items:center;gap:8
 const lst=`<div class="wl-list">${itms.map(v=>
 `<div class="wl-item" data-id="${this.esc(v.id)}" data-url="${this.esc(v.url)}">
 <input type="checkbox" class="wl-select" ${this.wlSel.has(v.id)?'checked':''}>
-<img src="${this.esc(v.thumbnail||'')}" class="wl-thumb" loading="lazy" onerror="this.style.display='none'">
+<img src="${this.esc(v.thumbnail||'')}" class="wl-thumb" loading="lazy">
 <div class="wl-meta"><div class="wl-t" title="${this.esc(v.title||'')}">${this.esc(v.title||'')}</div>
 <div class="wl-ch">${this.esc(v.channelTitle||'')}</div></div>
 <div class="wl-a"><button class="btn primary">Open</button><button class="btn remove">Remove</button></div></div>`
@@ -313,7 +335,7 @@ const tool=`<div class="wl-toolbar" style="display:flex;align-items:center;gap:8
 const lstH=`<div class="wv-list">${lst.map(v=>
 `<div class="wv-item" data-id="${this.esc(v.id)}" data-url="${this.esc(v.url)}">
 <input type="checkbox" class="wv-select" ${this.wvSel.has(v.id)?'checked':''}>
-<img src="${this.esc(v.thumbnail||'')}" class="wv-thumb" loading="lazy" onerror="this.style.display='none'">
+<img src="${this.esc(v.thumbnail||'')}" class="wv-thumb" loading="lazy">
 <div class="wv-meta"><div class="wv-t" title="${this.esc(v.title||'')}">${this.esc(v.title||'')}</div>
 <div class="wv-ch">${this.esc(v.channelTitle||'')}</div></div>
 <div class="wv-a"><button class="btn primary">Open</button><button class="btn unmark">Unmark</button></div></div>`
@@ -430,6 +452,19 @@ await chrome.runtime.sendMessage({action:'clearCache'});
 this.toast('Cache cleared','success');
 }catch(e){this.toast('Failed','error');}
 }
+}
+async downloadScanLog(){
+try{
+const r=await chrome.runtime.sendMessage({action:'getScanLogs'});
+if(r?.success&&r.logs?.length){
+const blob=new Blob([JSON.stringify(r.logs,null,2)],{type:'application/json'});
+const url=URL.createObjectURL(blob);
+const a=document.createElement('a');
+a.href=url;a.download=`yt-monitor-scan-log-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+a.click();URL.revokeObjectURL(url);
+this.toast('Log downloaded','success');
+}else this.toast('No logs available','warning');
+}catch(e){this.toast('Failed to get log','error');}
 }
 async openVid(url){
 if(this.set.autoOpen==='current'){
