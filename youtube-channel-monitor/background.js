@@ -49,12 +49,23 @@ try{
 if(this.st.actReq>=this.cfg.CONC)await new Promise(r=>setTimeout(r,1e3));
 this.st.actReq++;
 let u=url;
+try{
+const pu=new URL(u);
+if(!pu.pathname.endsWith('/videos')&&!pu.pathname.endsWith('/streams')){
+if(pu.pathname.includes('/@')||pu.pathname.includes('/channel/')){
+pu.pathname=pu.pathname.replace(/\/+$/,'')+'/videos';
+pu.search='';
+u=pu.toString();
+}
+}
+}catch{
 if(!u.includes('/videos')&&!u.includes('/streams')){
 if(u.includes('/@')||u.includes('/channel/'))u=u.replace(/\/$/,'')+'/videos';
 }
+}
 const ctrl=new AbortController();
 const tid=setTimeout(()=>ctrl.abort(),this.cfg.TIMEOUT);
-const res=await fetch(u,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},signal:ctrl.signal});
+const res=await fetch(u,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},signal:ctrl.signal});
 clearTimeout(tid);
 if(!res.ok)throw new Error(`HTTP ${res.status}`);
 const html=await res.text();
@@ -85,28 +96,104 @@ if(tc.richGridRenderer?.contents)cnts=tc.richGridRenderer.contents;
 else if(tc.sectionListRenderer?.contents){
 for(const s of tc.sectionListRenderer.contents){if(s.itemSectionRenderer?.contents)cnts.push(...s.itemSectionRenderer.contents);}
 }
-return cnts.map(i=>this.parseVR(i?.richItemRenderer?.content?.videoRenderer||i?.videoRenderer)).filter(Boolean).sort((a,b)=>b.pubTS-a.pubTS).slice(0,50);
+return cnts.map(i=>this.parseVR(i)).filter(Boolean).sort((a,b)=>b.pubTS-a.pubTS).slice(0,50);
 }catch{return[];}
 }
-parseVR(v){
+parseVR(item){
 try{
-if(!v?.videoId)return null;
-const t=v.title?.runs?.[0]?.text||v.title?.simpleText||'Untitled';
-const pt=v.publishedTimeText?.simpleText||v.publishedTimeText?.runs?.[0]?.text;
-const th=v.thumbnail?.thumbnails||[];
-return{id:v.videoId,title:t.trim(),url:`https://www.youtube.com/watch?v=${v.videoId}`,published:pt||'Recently',pubTS:this.parsePT(pt),discoveredAt:Date.now(),thumbnail:th[th.length-1]?.url||'',views:v.viewCountText?.simpleText||v.shortViewCountText?.simpleText||''};
+if(!item)return null;
+
+// 1. Support legacy videoRenderer
+const vr=item?.richItemRenderer?.content?.videoRenderer||item?.videoRenderer||(item.videoId?item:null);
+if(vr&&vr.videoId){
+const t=vr.title?.runs?.[0]?.text||vr.title?.simpleText||'Untitled';
+const pt=vr.publishedTimeText?.simpleText||vr.publishedTimeText?.runs?.[0]?.text;
+const th=vr.thumbnail?.thumbnails||[];
+const dur=vr.lengthText?.simpleText||'';
+const viewsRaw=vr.viewCountText?.simpleText||vr.shortViewCountText?.simpleText||'';
+let viewCountNum=0;
+try{
+const numM=viewsRaw.toLowerCase().match(/([\d.]+)\s*([kmbt]|thousand|million|billion)?/);
+if(numM){let b=parseFloat(numM[1])||0;const u=numM[2]||'';if(u.startsWith('k')||u.startsWith('thous'))b*=1e3;else if(u.startsWith('m'))b*=1e6;else if(u.startsWith('b'))b*=1e9;viewCountNum=Math.round(b);}
+}catch{}
+const isLive=!!(vr.badges?.some(b=>b.metadataBadgeRenderer?.style==='BADGE_STYLE_TYPE_LIVE_NOW')||vr.thumbnailOverlays?.some(o=>o.thumbnailOverlayTimeStatusRenderer?.style==='LIVE'));
+const isShort=!!(vr.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url?.includes('/shorts/'));
+return{id:vr.videoId,title:t.trim(),url:`https://www.youtube.com/watch?v=${vr.videoId}`,published:pt||'Recently',pubTS:this.parsePT(pt),discoveredAt:Date.now(),thumbnail:th[th.length-1]?.url||`https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,views:viewsRaw,duration:dur,viewCountNum,isLive,isShort};
+}
+
+// 2. Support modern lockupViewModel
+const lvm=item?.richItemRenderer?.content?.lockupViewModel||item?.lockupViewModel||(item.contentId?item:null);
+if(lvm){
+const videoId=lvm.contentId||lvm.rendererContext?.commandContext?.onTap?.innertubeCommand?.watchEndpoint?.videoId;
+if(!videoId)return null;
+
+const meta=lvm.metadata?.lockupMetadataViewModel;
+const title=meta?.title?.content||lvm.rendererContext?.accessibilityContext?.label||'Untitled';
+
+const thumbSources=lvm.contentImage?.thumbnailViewModel?.image?.sources||[];
+const thumbnail=thumbSources[thumbSources.length-1]?.url||`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+const overlays=lvm.contentImage?.thumbnailViewModel?.overlays||[];
+let duration='';
+let isLive=false;
+for(const ov of overlays){
+const badges=ov.thumbnailBottomOverlayViewModel?.badges||[];
+for(const b of badges){
+const tbvm=b.thumbnailBadgeViewModel;
+if(tbvm?.text)duration=tbvm.text;
+if(tbvm?.badgeStyle?.includes('LIVE')||tbvm?.text?.toLowerCase()==='live')isLive=true;
+}
+}
+
+const metaRows=meta?.metadata?.contentMetadataViewModel?.metadataRows||[];
+let viewsRaw='';
+let published='';
+for(const row of metaRows){
+for(const part of(row.metadataParts||[])){
+const text=part.text?.content||'';
+const a11y=part.accessibilityLabel||'';
+if(text.match(/ago/i)||a11y.match(/ago/i)||text.match(/live|now/i)){
+published=a11y||text;
+}else if(text.match(/view/i)||a11y.match(/view/i)||part.leadingIcon?.name?.includes('PLAY')){
+viewsRaw=a11y||(text?`${text} views`:'');
+}
+}
+}
+
+let viewCountNum=0;
+try{
+const numM=viewsRaw.toLowerCase().match(/([\d.]+)\s*([kmbt]|thousand|million|billion)?/);
+if(numM){let b=parseFloat(numM[1])||0;const u=numM[2]||'';if(u.startsWith('k')||u.startsWith('thous'))b*=1e3;else if(u.startsWith('m'))b*=1e6;else if(u.startsWith('b'))b*=1e9;viewCountNum=Math.round(b);}
+}catch{}
+
+const isShort=lvm.contentType==='LOCKUP_CONTENT_TYPE_SHORTS';
+
+return{id:videoId,title:title.trim(),url:`https://www.youtube.com/watch?v=${videoId}`,published:published||'Recently',pubTS:this.parsePT(published),discoveredAt:Date.now(),thumbnail,views:viewsRaw,duration,viewCountNum,isLive,isShort};
+}
+
+return null;
 }catch{return null;}
 }
-parsePT(tx){
-if(!tx)return Date.now()-864e5;
-const now=Date.now();
-const m=tx.toLowerCase().trim().match(/(?:streamed|premiered)?\s*(\d+)\s*(second|minute|hour|day|week|month|year)s?\s+ago/);
+parsePT(tx,baseTime=Date.now()){
+if(!tx)return baseTime-864e5;
+const s=tx.toLowerCase().trim();
+if(s.includes('now')||s.includes('moment')||s.includes('live'))return baseTime;
+if(s.includes('yesterday'))return baseTime-864e5;
+const m=s.match(/(\d+)\s*(second|sec|minute|min|hour|hr|day|d|week|wk|month|mo|year|yr)s?\b/i);
 if(m){
-const[,amt,u]=m;
-const mul={second:1e3,minute:6e4,hour:36e5,day:864e5,week:6048e5,month:2592e6,year:31536e6};
-return now-parseInt(amt)*(mul[u]||864e5);
+const amt=parseInt(m[1],10);
+const u=m[2].toLowerCase();
+let mult=864e5;
+if(u.startsWith('sec'))mult=1e3;
+else if(u.startsWith('min'))mult=6e4;
+else if(u.startsWith('h'))mult=36e5;
+else if(u==='d'||u.startsWith('day'))mult=864e5;
+else if(u.startsWith('w'))mult=6048e5;
+else if(u.startsWith('m'))mult=2592e6;
+else if(u.startsWith('y'))mult=31536e6;
+return baseTime-amt*mult;
 }
-return now-864e5;
+return baseTime-864e5;
 }
 async getStVids(url){const k=`videos_${this.hash(url)}`;try{const r=await this.gLoc([k]);return r[k]||[];}catch{return[];}}
 async stVids(url,vids){const k=`videos_${this.hash(url)}`;try{await this.sLoc({[k]:vids.slice(0,this.cfg.CACHE)});}catch{}}
@@ -115,7 +202,7 @@ async getTF(){try{const r=await this.gSync(['timeFilter']);return r.timeFilter||
 async getTFTS(f){
 const now=Date.now();
 if(f==='sincelastvisit'||f==='lastcheck'){try{const r=await this.gLoc(['lastManualCheck']);return r.lastManualCheck||(now-864e5);}catch{return now-864e5;}}
-const mp={'1hour':36e5,'6hour':216e5,'12hour':432e5,'1day':864e5,'1week':6048e5,'1month':2592e6,'1year':31536e6};
+const mp={'1hour':39e5,'6hour':234e5,'12hour':468e5,'1day':1296e5,'1week':6912e5,'1month':28512e5,'1year':31536e6};
 return now-(mp[f]||mp['1day']);
 }
 async badge(txt,col='#ef4444'){try{await chrome.action.setBadgeText({text:txt.toString()});await chrome.action.setBadgeBackgroundColor({color:col});}catch{}}
@@ -213,7 +300,8 @@ addToWatchLater:()=>mon.addWL(msg.video),
 removeFromWatchLater:()=>mon.rmWL(msg.videoId),
 clearWatchLater:()=>mon.clrWL(),
 removeManyFromWatchLater:async()=>{try{const ids=msg.videoIds||[];if(!Array.isArray(ids)||!ids.length)return{success:true,removed:0};const ex=await mon.getWL();const idSet=new Set(ids);const flt=ex.filter(v=>!idSet.has(v.id));await mon.sLoc({watchLaterVideos:flt});return{success:true,removed:ex.length-flt.length};}catch(e){return{success:false,error:e.message};}},
-checkChannelNow:async()=>{try{const{url,title}=msg.channel||{};if(!url)throw new Error('Missing channel url');const tf=await mon.getTF();const fts=await mon.getTFTS(tf);const wv=await mon.getWV();const res=await mon.procCh({url,title},fts,wv,false);const d=await mon.gLoc(['channelResults']);let lst=d.channelResults||[];const idx=lst.findIndex(c=>c.channelUrl===url);if(idx>=0)lst[idx]=res;else lst.unshift(res);await mon.stChRes(lst,tf);return{success:true,result:res};}catch(e){return{success:false,error:e.message};}}
+checkChannelNow:async()=>{try{const{url,title}=msg.channel||{};if(!url)throw new Error('Missing channel url');const tf=await mon.getTF();const fts=await mon.getTFTS(tf);const wv=await mon.getWV();const res=await mon.procCh({url,title},fts,wv,false);const d=await mon.gLoc(['channelResults']);let lst=d.channelResults||[];const idx=lst.findIndex(c=>c.channelUrl===url);if(idx>=0)lst[idx]=res;else lst.unshift(res);await mon.stChRes(lst,tf);return{success:true,result:res};}catch(e){return{success:false,error:e.message};}},
+openFeedTab:async()=>{try{const feedUrl=chrome.runtime.getURL('feed.html');const[existing]=await chrome.tabs.query({url:feedUrl});if(existing){await chrome.tabs.update(existing.id,{active:true});await chrome.windows.update(existing.windowId,{focused:true});}else{await chrome.tabs.create({url:feedUrl,active:true});}return{success:true};}catch(e){return{success:false,error:e.message};}}
 };
 const act=acts[msg.action];
 if(act){act().then(sendRes).catch(err=>sendRes({success:false,error:err.message}));return true;}

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YouTube Channel Monitor — Home Feed</title>
+  <link rel="stylesheet" href="feed.css">
+</head>
+<body>
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">
+        <svg class="topbar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M21.582 6.186a2.533 2.533 0 0 0-1.76-1.784C18.25 4 12 4 12 4s-6.25 0-7.822.402a2.533 2.533 0 0 0-1.76 1.784C2 7.778 2 12 2 12s0 4.222.418 5.814a2.533 2.533 0 0 0 1.76 1.784C5.75 20 12 20 12 20s6.25 0 7.822-.402a2.533 2.533 0 0 0 1.76-1.784C22 16.222 22 12 22 12s0-4.222-.418-5.814zM10 15.464V8.536L16 12l-6 3.464z"/>
+        </svg>
+        <span class="brand-title">Feed</span>
+      </div>
+
+      <!-- Tabs matching extension popup -->
+      <nav class="nav-tabs" role="tablist">
+        <button id="tab-ch" class="nav-tab active" role="tab">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3zm2 2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6z"/></svg>
+          Channels
+        </button>
+        <button id="tab-wl" class="nav-tab" role="tab">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm.75-13a.75.75 0 0 0-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 0 0 0-1.5h-3.25V5z" clip-rule="evenodd"/></svg>
+          Watch Later (<span id="wl-badge">0</span>)
+        </button>
+        <button id="tab-wv" class="nav-tab" role="tab">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3.5C5 3.5 1.73 7.11.46 9.18a1.25 1.25 0 0 0 0 1.64C1.73 12.89 5 16.5 10 16.5s8.27-3.61 9.54-5.68a1.25 1.25 0 0 0 0-1.64C18.27 7.11 15 3.5 10 3.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" clip-rule="evenodd"/></svg>
+          Watched (<span id="wv-badge">0</span>)
+        </button>
+      </nav>
+    </div>
+
+    <!-- Center Search matching extension -->
+    <div class="topbar-center">
+      <div class="search-box">
+        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd"/>
+        </svg>
+        <input type="search" id="f-search" placeholder="Search channels or videos..." autocomplete="off" spellcheck="false">
+        <kbd class="search-hint">/</kbd>
+      </div>
+    </div>
+
+    <!-- Right Controls matching extension -->
+    <div class="topbar-right">
+      <!-- Time filter dropdown matching extension -->
+      <select id="f-time" class="dropdown" title="Time Filter">
+        <option value="1hour">Last 1 hour</option>
+        <option value="6hour">Last 6 hours</option>
+        <option value="12hour">Last 12 hours</option>
+        <option value="1day">Last 24 hours</option>
+        <option value="1week">Last week</option>
+        <option value="1month">Last month</option>
+        <option value="sincelastvisit">Since last visit</option>
+        <option value="all">All time</option>
+      </select>
+
+      <!-- Sort dropdown matching extension -->
+      <select id="f-sort" class="dropdown" title="Sort Order">
+        <option value="activity">⚡ Activity</option>
+        <option value="new">✨ New Videos</option>
+        <option value="views">👁️ Most Viewed</option>
+        <option value="name">🔤 Name</option>
+      </select>
+
+      <!-- Hide Watched Toggle Button -->
+      <button id="btn-hw" class="btn-toggle" title="Toggle hide watched videos">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06l-1.745-1.745a10.029 10.029 0 0 0 3.3-4.38 1.651 1.651 0 0 0 0-1.185A10.004 10.004 0 0 0 9.999 3a9.956 9.956 0 0 0-4.744 1.194L3.28 2.22ZM7.752 6.69l1.092 1.092a2.5 2.5 0 0 1 3.374 3.375l1.091 1.091a4 4 0 0 0-5.557-5.558Z" clip-rule="evenodd"/><path d="M10.748 13.93l2.523 2.523a9.987 9.987 0 0 1-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 0 1 0-1.186A10.007 10.007 0 0 1 2.839 6.02L6.07 9.252a4 4 0 0 0 4.678 4.678Z"/></svg>
+        <span>Hide Watched</span>
+      </button>
+
+      <!-- Check Now Button -->
+      <button id="btn-check" class="btn primary" title="Check for new videos now">
+        <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M16.03 4.47a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06L9 10.94l6.03-5.97a.75.75 0 0 1 .94.06Z" clip-rule="evenodd"/></svg>
+        <svg class="icon-loader" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.312a.75.75 0 0 1 0-1.062l1.98-1.98a.75.75 0 0 1 1.06 0V3.75a.75.75 0 0 1-1.5 0v-.379l-1.98 1.98a.75.75 0 0 1-1.06 0ZM4.688 8.688a.75.75 0 0 1 0 1.062l-1.98 1.98a.75.75 0 0 1-1.06 0V16.25a.75.75 0 0 1 1.5 0v.379l1.98-1.98a.75.75 0 0 1 1.06 0ZM11.312 4.688a.75.75 0 0 1 1.062 0l1.98 1.98a.75.75 0 0 1 0 1.06V11.25a.75.75 0 0 1-1.5 0v.379l-1.98-1.98a.75.75 0 0 1 0-1.062ZM8.688 15.312a.75.75 0 0 1-1.062 0l-1.98-1.98a.75.75 0 0 1 0-1.06V8.75a.75.75 0 0 1 1.5 0v-.379l1.98 1.98a.75.75 0 0 1 0 1.062Z" clip-rule="evenodd"/></svg>
+        <span>Check Now</span>
+      </button>
+
+      <!-- Settings Button -->
+      <button id="btn-settings" class="btn icon-btn" title="Settings">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 0 1-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 0 1 .947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 0 1 2.287.947c.379 1.561 2.6 1.561 2.978 0a1.532 1.532 0 0 1 2.287-.947c1.372.836 2.942-.734 2.106-2.106a1.532 1.532 0 0 1-.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 0 1-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 0 1-2.287-.947ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Filter chips (Channels) -->
+  <nav class="chip-bar" id="chip-bar">
+    <div class="chip-scroll" id="chip-scroll"></div>
+  </nav>
+
+  <!-- Stats bar matching extension popup: Channels: X | New: Y | Total: Z -->
+  <div class="s-bar" id="s-bar">
+    <div class="s-item">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3z"/></svg>
+      Channels: <strong id="s-ch">0</strong>
+    </div>
+    <div class="s-item">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-11.25a.75.75 0 0 0-1.5 0v2.5h-2.5a.75.75 0 0 0 0 1.5h2.5v2.5a.75.75 0 0 0 1.5 0v-2.5h2.5a.75.75 0 0 0 0-1.5h-2.5v-2.5Z" clip-rule="evenodd"/></svg>
+      New: <strong id="s-new">0</strong>
+    </div>
+    <div class="s-item">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM10 8.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM11.5 15.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z"/></svg>
+      Total: <strong id="s-total">0</strong>
+    </div>
+    <div class="s-item s-status">
+      <span class="indicator" id="ind"></span>
+      <span id="st-text">Loading...</span>
+    </div>
+  </div>
+
+  <!-- Settings panel overlay -->
+  <div class="settings-overlay hidden" id="settings-overlay">
+    <div class="settings-backdrop" id="settings-backdrop"></div>
+    <div class="settings-modal">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="close-btn" id="close-settings">&times;</button>
+      </div>
+      <div class="settings-body">
+        <div class="set-i"><label for="set-int">Check Interval:</label><select id="set-int"><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
+        <div class="set-i"><label for="set-open">Open Videos In:</label><select id="set-open"><option value="current">Current Tab</option><option value="new">New Tab</option><option value="background">Background Tab</option></select></div>
+        <div class="set-i"><label for="set-hw">Hide Watched Videos:</label><input type="checkbox" id="set-hw"></div>
+        <div class="set-i"><label for="set-notif">Desktop Notifications:</label><input type="checkbox" id="set-notif"></div>
+        <div class="set-i"><label>Actions:</label><div style="display:flex;gap:8px;"><button id="btn-cw" class="btn warning">Clear Watched</button><button id="btn-cd" class="btn">Clear Cache</button></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video grid (Standard YouTube Home Grid) -->
+  <main class="feed" id="feed"></main>
+
+  <!-- Sentinel for infinite scroll -->
+  <div class="scroll-sentinel" id="scroll-sentinel"></div>
+
+  <script src="feed.js"></script>
+</body>
+</html>

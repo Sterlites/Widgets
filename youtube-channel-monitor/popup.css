@@ -7,10 +7,11 @@ body{width:550px;min-height:800px;max-height:800px;font-family:var(--font-sans);
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bg-interactive);border-radius:4px}
 ::-webkit-scrollbar-thumb:hover{background:#4a4d5a}
-.header{display:flex;align-items:center;padding:10px 14px;background-color:var(--bg-secondary);border-bottom:1px solid var(--border-color);flex-shrink:0}
+.header{display:flex;align-items:center;padding:10px 14px;background-color:var(--bg-secondary);border-bottom:1px solid var(--border-color);flex-shrink:0;gap:8px}
 .header-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
 .header-title svg{width:20px;height:20px;color:var(--accent-primary)}
 .status{margin-left:auto;font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px}
+.feed-btn{display:flex;align-items:center;gap:5px;padding:5px 10px!important;font-size:12px!important;white-space:nowrap;flex-shrink:0}
 .indicator{width:8px;height:8px;border-radius:50%;background-color:var(--accent-success);transition:background-color var(--transition-med);animation:pulse 2s infinite}
 .indicator.checking{background-color:var(--accent-warning);animation:spin 1s linear infinite}
 .indicator.error{background-color:var(--accent-danger)}

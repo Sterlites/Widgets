@@ -22,7 +22,7 @@ this.D={res:g('res'),sbar:g('s-bar'),sCh:g('s-ch'),sNew:g('s-new'),sTotal:g('s-t
 ind:g('ind'),tabCh:g('tab-ch'),tabWl:g('tab-wl'),tabWv:g('tab-wv'),btnCheck:g('btn-check'),fTime:g('f-time'),
 fSort:g('f-sort'),fSearch:g('f-search'),fHwCb:g('f-hw-cb'),btnCw:g('btn-cw'),setInt:g('set-int'),
 setNotif:g('set-notif'),setOpen:g('set-open'),controlSet:[g('filter-controls')],btnSettings:g('btn-settings'),
-settingsPanel:g('settings-panel'),btnToggleAll:g('btn-toggle-all')};
+settingsPanel:g('settings-panel'),btnToggleAll:g('btn-toggle-all'),btnFeed:g('btn-feed')};
 }
 async init(){
 this.loading('Initializing...');
@@ -72,6 +72,8 @@ async loadChRes(){this.chRes=(await chrome.storage.local.get('channelResults')).
 setupEvt(){
 const{btnCheck,fTime,fSort,fHwCb,fSearch,tabCh,tabWl,tabWv,btnSettings,btnToggleAll,res,btnCw,setInt,setNotif,setOpen}=this.D;
 btnCheck.addEventListener('click',()=>this.checkNow());
+if(this.D.btnFeed)this.D.btnFeed.addEventListener('click',()=>this.openFeed());
+res.addEventListener('error',e=>{if(e.target&&e.target.tagName==='IMG')e.target.style.display='none';},true);
 fTime.addEventListener('change',e=>this.handleFilt('timeFilter',e.target.value));
 fSort.addEventListener('change',e=>{this.sort=e.target.value;this.updateUI();});
 fHwCb.addEventListener('change',e=>this.handleFilt('hideWatched',e.target.checked));
@@ -176,10 +178,11 @@ this.D.settingsPanel.classList.add('hidden');
 this.updateUI();
 }
 applyFilt(){
-const ts=Date.now()-({'1hour':36e5,'6hour':216e5,'12hour':432e5,'1day':864e5,'1week':6048e5,'1month':2592e6}[this.tf]||864e5);
+const mp={'1hour':39e5,'6hour':234e5,'12hour':468e5,'1day':1296e5,'1week':6912e5,'1month':28512e5};
+const ts=Date.now()-(mp[this.tf]||864e5);
 this.fltRes=this.chRes.map(ch=>{
 if(ch.error)return null;
-let vids=(ch.totalVideos||[]).filter(v=>v.pubTS>=ts);
+let vids=(ch.totalVideos||[]).map(v=>({...v,pubTS:v.published?this.parsePT(v.published,v.discoveredAt||v.pubTS):v.pubTS})).filter(v=>v.pubTS>=ts);
 if(this.hideW)vids=vids.filter(v=>!this.wv[v.id]);
 if(this.srchQ){
 const q=this.srchQ;
@@ -234,6 +237,7 @@ this.fltRes.sort((a,b)=>{
 if(a.error&&!b.error)return 1;
 if(b.error&&!a.error)return-1;
 if(this.sort==='new')return(b.newVideos?.length||0)-(a.newVideos?.length||0);
+if(this.sort==='views')return Math.max(...(b.filteredVideos?.map(v=>v.viewCountNum||0)||[0]))-Math.max(...(a.filteredVideos?.map(v=>v.viewCountNum||0)||[0]));
 if(this.sort==='activity')return Math.max(...(b.filteredVideos?.map(v=>v.pubTS)||[0]))-Math.max(...(a.filteredVideos?.map(v=>v.pubTS)||[0]));
 return a.channelTitle.localeCompare(b.channelTitle);
 });
@@ -282,7 +286,7 @@ const tool=`<div class="wl-toolbar" style="display:flex;align-items:center;gap:8
 const lst=`<div class="wl-list">${itms.map(v=>
 `<div class="wl-item" data-id="${this.esc(v.id)}" data-url="${this.esc(v.url)}">
 <input type="checkbox" class="wl-select" ${this.wlSel.has(v.id)?'checked':''}>
-<img src="${this.esc(v.thumbnail||'')}" class="wl-thumb" loading="lazy" onerror="this.style.display='none'">
+<img src="${this.esc(v.thumbnail||'')}" class="wl-thumb" loading="lazy">
 <div class="wl-meta"><div class="wl-t" title="${this.esc(v.title||'')}">${this.esc(v.title||'')}</div>
 <div class="wl-ch">${this.esc(v.channelTitle||'')}</div></div>
 <div class="wl-a"><button class="btn primary">Open</button><button class="btn remove">Remove</button></div></div>`
@@ -313,7 +317,7 @@ const tool=`<div class="wl-toolbar" style="display:flex;align-items:center;gap:8
 const lstH=`<div class="wv-list">${lst.map(v=>
 `<div class="wv-item" data-id="${this.esc(v.id)}" data-url="${this.esc(v.url)}">
 <input type="checkbox" class="wv-select" ${this.wvSel.has(v.id)?'checked':''}>
-<img src="${this.esc(v.thumbnail||'')}" class="wv-thumb" loading="lazy" onerror="this.style.display='none'">
+<img src="${this.esc(v.thumbnail||'')}" class="wv-thumb" loading="lazy">
 <div class="wv-meta"><div class="wv-t" title="${this.esc(v.title||'')}">${this.esc(v.title||'')}</div>
 <div class="wv-ch">${this.esc(v.channelTitle||'')}</div></div>
 <div class="wv-a"><button class="btn primary">Open</button><button class="btn unmark">Unmark</button></div></div>`
@@ -438,6 +442,10 @@ if(curTab)chrome.tabs.update(curTab.id,{url});
 }else chrome.tabs.create({url,active:this.set.autoOpen!=='background'});
 }
 async openCh(url){if(!url)return;chrome.tabs.create({url,active:true});}
+async openFeed(){
+try{await chrome.runtime.sendMessage({action:'openFeedTab'});window.close();}
+catch{const feedUrl=chrome.runtime.getURL('feed.html');chrome.tabs.create({url:feedUrl,active:true});window.close();}
+}
 async checkChNow(ch){
 try{
 await chrome.runtime.sendMessage({action:'checkChannelNow',channel:ch});
@@ -480,4 +488,25 @@ return typ==='wl'?
 }
 destroy(){clearInterval(this.statInt);}
 hash(url){let h=0;for(let i=0;i<url.length;i++)h=((h<<5)-h)+url.charCodeAt(i),h&=h;return Math.abs(h).toString();}
+parsePT(tx,baseTime=Date.now()){
+if(!tx)return baseTime-864e5;
+const s=tx.toLowerCase().trim();
+if(s.includes('now')||s.includes('moment')||s.includes('live'))return baseTime;
+if(s.includes('yesterday'))return baseTime-864e5;
+const m=s.match(/(\d+)\s*(second|sec|minute|min|hour|hr|day|d|week|wk|month|mo|year|yr)s?\b/i);
+if(m){
+const amt=parseInt(m[1],10);
+const u=m[2].toLowerCase();
+let mult=864e5;
+if(u.startsWith('sec'))mult=1e3;
+else if(u.startsWith('min'))mult=6e4;
+else if(u.startsWith('h'))mult=36e5;
+else if(u==='d'||u.startsWith('day'))mult=864e5;
+else if(u.startsWith('w'))mult=6048e5;
+else if(u.startsWith('m'))mult=2592e6;
+else if(u.startsWith('y'))mult=31536e6;
+return baseTime-amt*mult;
+}
+return baseTime-864e5;
+}
 }
