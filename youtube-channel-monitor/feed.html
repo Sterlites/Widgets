@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YouTube Channel Monitor — Home Feed</title>
+  <title>YouTube Channel Monitor — Intelligent Home Feed</title>
   <link rel="stylesheet" href="feed.css">
 </head>
 <body>
@@ -17,7 +17,7 @@
         <span class="brand-title">Feed</span>
       </div>
 
-      <!-- Tabs matching extension popup -->
+      <!-- Navigation Tabs -->
       <nav class="nav-tabs" role="tablist">
         <button id="tab-ch" class="nav-tab active" role="tab">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3zm2 2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6zm4 0a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1V6z"/></svg>
@@ -34,7 +34,7 @@
       </nav>
     </div>
 
-    <!-- Center Search matching extension -->
+    <!-- Center Search -->
     <div class="topbar-center">
       <div class="search-box">
         <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -45,9 +45,33 @@
       </div>
     </div>
 
-    <!-- Right Controls matching extension -->
+    <!-- Right Controls -->
     <div class="topbar-right">
-      <!-- Time filter dropdown matching extension -->
+      <!-- View mode switch -->
+      <div class="view-switcher" role="group" aria-label="Layout View Modes">
+        <button id="view-grid" class="btn icon-btn active" title="Standard Grid View" data-view="grid">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.25 2A2.25 2.25 0 0 0 2 4.25v2.5A2.25 2.25 0 0 0 4.25 9h2.5A2.25 2.25 0 0 0 9 6.75v-2.5A2.25 2.25 0 0 0 6.75 2h-2.5zm0 9A2.25 2.25 0 0 0 2 13.25v2.5A2.25 2.25 0 0 0 4.25 18h2.5A2.25 2.25 0 0 0 9 15.75v-2.5A2.25 2.25 0 0 0 6.75 11h-2.5zm9-9A2.25 2.25 0 0 0 11 4.25v2.5A2.25 2.25 0 0 0 13.25 9h2.5A2.25 2.25 0 0 0 18 6.75v-2.5A2.25 2.25 0 0 0 15.75 2h-2.5zm0 9A2.25 2.25 0 0 0 11 13.25v2.5A2.25 2.25 0 0 0 13.25 18h2.5A2.25 2.25 0 0 0 18 15.75v-2.5A2.25 2.25 0 0 0 15.75 11h-2.5z" clip-rule="evenodd"/></svg>
+        </button>
+        <button id="view-compact" class="btn icon-btn" title="Compact List / Triage View" data-view="compact">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75zM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10zm0 5.25a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75z" clip-rule="evenodd"/></svg>
+        </button>
+        <button id="view-swimlane" class="btn icon-btn" title="Group by Channel (Swimlanes)" data-view="swimlane">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75zm0 6A.75.75 0 0 1 2.75 9h8.5a.75.75 0 0 1 0 1.5h-8.5A.75.75 0 0 1 2 9.75zm0 6a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75z" clip-rule="evenodd"/></svg>
+        </button>
+      </div>
+
+      <!-- Content Format filter -->
+      <select id="f-content" class="dropdown" title="Content Format Filter">
+        <option value="all">🎬 All Formats</option>
+        <option value="no-shorts">🚫 Hide Shorts</option>
+        <option value="shorts">⚡ Shorts Only</option>
+        <option value="quick">⏱️ Quick (&lt; 5m)</option>
+        <option value="standard">☕ Standard (5-20m)</option>
+        <option value="long">🍿 Deep Dive (&gt; 20m)</option>
+        <option value="live">🔴 Live Streams</option>
+      </select>
+
+      <!-- Time filter dropdown -->
       <select id="f-time" class="dropdown" title="Time Filter">
         <option value="1hour">Last 1 hour</option>
         <option value="6hour">Last 6 hours</option>
@@ -59,7 +83,7 @@
         <option value="all">All time</option>
       </select>
 
-      <!-- Sort dropdown matching extension -->
+      <!-- Sort dropdown -->
       <select id="f-sort" class="dropdown" title="Sort Order">
         <option value="activity">⚡ Activity</option>
         <option value="new">✨ New Videos</option>
@@ -92,7 +116,7 @@
     <div class="chip-scroll" id="chip-scroll"></div>
   </nav>
 
-  <!-- Stats bar matching extension popup: Channels: X | New: Y | Total: Z -->
+  <!-- Stats bar -->
   <div class="s-bar" id="s-bar">
     <div class="s-item">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H3z"/></svg>
@@ -121,17 +145,113 @@
         <button class="close-btn" id="close-settings">&times;</button>
       </div>
       <div class="settings-body">
-        <div class="set-i"><label for="set-int">Check Interval:</label><select id="set-int"><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select></div>
-        <div class="set-i"><label for="set-open">Open Videos In:</label><select id="set-open"><option value="current">Current Tab</option><option value="new">New Tab</option><option value="background">Background Tab</option></select></div>
-        <div class="set-i"><label for="set-hw">Hide Watched Videos:</label><input type="checkbox" id="set-hw"></div>
-        <div class="set-i"><label for="set-notif">Desktop Notifications:</label><input type="checkbox" id="set-notif"></div>
-        <div class="set-i"><label>Actions:</label><div style="display:flex;gap:8px;"><button id="btn-cw" class="btn warning">Clear Watched</button><button id="btn-cd" class="btn">Clear Cache</button></div></div>
+        <div class="set-i">
+          <label for="set-folder">Bookmark Folder:</label>
+          <div style="display:flex;gap:6px;flex:1;max-width:210px;">
+            <input type="text" id="set-folder" placeholder="Vid" list="folder-suggestions" style="width:100%;">
+            <datalist id="folder-suggestions"></datalist>
+          </div>
+        </div>
+        <div class="set-i">
+          <label for="set-int">Check Interval:</label>
+          <select id="set-int">
+            <option value="15">15 min</option>
+            <option value="30">30 min</option>
+            <option value="60">1 hour</option>
+          </select>
+        </div>
+        <div class="set-i">
+          <label for="set-open">Open Videos In:</label>
+          <select id="set-open">
+            <option value="current">Current Tab</option>
+            <option value="new">New Tab</option>
+            <option value="background">Background Tab</option>
+            <option value="modal">In-Feed Modal Player</option>
+          </select>
+        </div>
+        <div class="set-i">
+          <label for="set-hw">Hide Watched Videos:</label>
+          <input type="checkbox" id="set-hw">
+        </div>
+        <div class="set-i">
+          <label for="set-notif">Desktop Notifications:</label>
+          <input type="checkbox" id="set-notif">
+        </div>
+        <div class="set-i">
+          <label>Actions:</label>
+          <div style="display:flex;gap:8px;">
+            <button id="btn-cw" class="btn warning">Clear Watched</button>
+            <button id="btn-cd" class="btn">Clear Cache</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Video grid (Standard YouTube Home Grid) -->
-  <main class="feed" id="feed"></main>
+  <!-- In-Feed Video Player Modal -->
+  <div class="settings-overlay hidden" id="player-modal">
+    <div class="settings-backdrop" id="player-backdrop"></div>
+    <div class="player-container">
+      <div class="player-header">
+        <h3 id="player-title" class="player-title">Playing Video</h3>
+        <div class="player-actions">
+          <button id="player-pip" class="btn icon-btn" title="Open in Document Picture-in-Picture">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M1 4.25A2.25 2.25 0 0 1 3.25 2h13.5A2.25 2.25 0 0 1 19 4.25v11.5A2.25 2.25 0 0 1 16.75 18H3.25A2.25 2.25 0 0 1 1 15.75V4.25zm11 5.5A1.75 1.75 0 0 1 13.75 8h3.5A1.75 1.75 0 0 1 19 9.75v4.5A1.75 1.75 0 0 1 17.25 16h-3.5A1.75 1.75 0 0 1 12 14.25v-4.5z" clip-rule="evenodd"/></svg>
+          </button>
+          <button id="player-open-tab" class="btn icon-btn" title="Open on YouTube in new tab">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Zm7.25-2a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-5.72 5.72a.75.75 0 1 1-1.06-1.06l5.72-5.72H12.25a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/></svg>
+          </button>
+          <button class="close-btn" id="close-player">&times;</button>
+        </div>
+      </div>
+      <div class="player-iframe-wrapper">
+        <iframe id="player-iframe" src="" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- On-Device AI Video Summarizer Modal -->
+  <div class="settings-overlay hidden" id="ai-modal">
+    <div class="settings-backdrop" id="ai-backdrop"></div>
+    <div class="ai-modal-box">
+      <div class="ai-modal-header">
+        <div class="ai-modal-title-wrap">
+          <span class="ai-sparkle">✨</span>
+          <h2>AI Video Summary</h2>
+          <span class="ai-model-tag">On-Device Nano</span>
+        </div>
+        <button class="close-btn" id="close-ai">&times;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="ai-video-preview" id="ai-video-preview"></div>
+        <div class="ai-content-area" id="ai-content-area">
+          <div class="ai-loader" id="ai-loader">
+            <div class="ai-shimmer-line"></div>
+            <div class="ai-shimmer-line short"></div>
+            <div class="ai-shimmer-line medium"></div>
+            <p class="ai-loader-text">Analyzing transcript on-device with Chrome AI...</p>
+          </div>
+          <div class="ai-result hidden" id="ai-result">
+            <div class="ai-summary-card">
+              <h4>Core Thesis</h4>
+              <p id="ai-core-takeaway"></p>
+            </div>
+            <div class="ai-takeaways-card">
+              <h4>Key Takeaways</h4>
+              <ul id="ai-bullets"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ai-modal-footer">
+        <button id="ai-copy-btn" class="btn" style="display:none;">📋 Copy Summary</button>
+        <button id="ai-play-btn" class="btn primary">▶ Play Video</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video Feed Container -->
+  <main class="feed view-grid" id="feed"></main>
 
   <!-- Sentinel for infinite scroll -->
   <div class="scroll-sentinel" id="scroll-sentinel"></div>

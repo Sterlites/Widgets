@@ -1,6 +1,7 @@
 /**
- * YouTube Channel Monitor — Home Feed
- * Seamlessly matches extension filters, data, and settings in a YouTube-style grid.
+ * YouTube Channel Monitor — Intelligent Home Feed (v1.5.0)
+ * Modern YouTube-style aggregator with multi-density views,
+ * moving WebP previews, in-feed Document PiP player, and on-device AI summaries.
  */
 
 const AVATAR_COLORS = [
@@ -15,7 +16,7 @@ const TIME_MS = {
   '1hour': 36e5 + 3e5,       // 65 mins
   '6hour': 216e5 + 18e5,     // 6.5 hours
   '12hour': 432e5 + 36e5,    // 13 hours
-  '1day': 864e5 + 432e5,     // 36 hours (covers all "1 day ago" / yesterday videos)
+  '1day': 864e5 + 432e5,     // 36 hours (covers yesterday)
   '1week': 6048e5 + 864e5,   // 8 days
   '1month': 2592e6 + 2592e5, // 33 days
   '1year': 31536e6,
@@ -24,19 +25,22 @@ const TIME_MS = {
 class FeedApp {
   constructor() {
     this.view = 'channels'; // 'channels' | 'watchLater' | 'watched'
+    this.viewMode = 'grid'; // 'grid' | 'compact' | 'swimlane'
     this.channelResults = [];
     this.allChannelVideos = [];
     this.filteredVideos = [];
     this.displayedCount = 0;
 
-    // Filters matching extension
+    // Filters
     this.timeFilter = '1month';
+    this.contentFilter = 'all'; // 'all' | 'no-shorts' | 'shorts' | 'quick' | 'standard' | 'long' | 'live'
     this.sortMode = 'activity';
     this.searchQuery = '';
     this.hideWatched = false;
     this.activeChannelChip = 'all';
 
     // State & Cache
+    this.bookmarkFolder = 'Vid';
     this.watchedVideos = {};
     this.watchLaterList = [];
     this.watchLaterMap = new Map();
@@ -45,6 +49,10 @@ class FeedApp {
     this.checking = false;
     this.searchDebounce = null;
     this.observer = null;
+
+    // Active modals state
+    this.currentPlayingVideo = null;
+    this.currentAIVideo = null;
 
     this.init();
   }
@@ -60,6 +68,7 @@ class FeedApp {
     this.setupInfiniteScroll();
     this.setupKeyboard();
     this.setupStorageListener();
+    this.populateFolderSuggestions();
     this.updateUI();
     this.updateStatus();
   }
@@ -71,10 +80,16 @@ class FeedApp {
       chipScroll: $('chip-scroll'),
       search: $('f-search'),
       fTime: $('f-time'),
+      fContent: $('f-content'),
       fSort: $('f-sort'),
       btnHw: $('btn-hw'),
       btnCheck: $('btn-check'),
       btnSettings: $('btn-settings'),
+
+      // View Switcher Buttons
+      viewGrid: $('view-grid'),
+      viewCompact: $('view-compact'),
+      viewSwimlane: $('view-swimlane'),
 
       // Tabs
       tabCh: $('tab-ch'),
@@ -94,12 +109,35 @@ class FeedApp {
       settingsOverlay: $('settings-overlay'),
       settingsBackdrop: $('settings-backdrop'),
       closeSettings: $('close-settings'),
+      setFolder: $('set-folder'),
+      folderSuggestions: $('folder-suggestions'),
       setInt: $('set-int'),
       setOpen: $('set-open'),
       setHw: $('set-hw'),
       setNotif: $('set-notif'),
       btnCw: $('btn-cw'),
       btnCd: $('btn-cd'),
+
+      // Player Modal
+      playerModal: $('player-modal'),
+      playerBackdrop: $('player-backdrop'),
+      closePlayer: $('close-player'),
+      playerTitle: $('player-title'),
+      playerIframe: $('player-iframe'),
+      playerPip: $('player-pip'),
+      playerOpenTab: $('player-open-tab'),
+
+      // AI Summary Modal
+      aiModal: $('ai-modal'),
+      aiBackdrop: $('ai-backdrop'),
+      closeAi: $('close-ai'),
+      aiVideoPreview: $('ai-video-preview'),
+      aiLoader: $('ai-loader'),
+      aiResult: $('ai-result'),
+      aiCoreTakeaway: $('ai-core-takeaway'),
+      aiBullets: $('ai-bullets'),
+      aiCopyBtn: $('ai-copy-btn'),
+      aiPlayBtn: $('ai-play-btn'),
 
       sentinel: $('scroll-sentinel'),
     };
@@ -109,11 +147,15 @@ class FeedApp {
 
   async loadSettings() {
     const r = await chrome.storage.sync.get([
-      'timeFilter', 'hideWatched', 'checkInterval', 'autoOpen', 'notifications', 'feedSort'
+      'timeFilter', 'contentFilter', 'hideWatched', 'checkInterval',
+      'autoOpen', 'notifications', 'feedSort', 'feedViewMode', 'bookmarkFolder'
     ]);
     this.timeFilter = r.timeFilter || '1month';
+    this.contentFilter = r.contentFilter || 'all';
     this.hideWatched = !!r.hideWatched;
     this.sortMode = r.feedSort || 'activity';
+    this.viewMode = r.feedViewMode || 'grid';
+    this.bookmarkFolder = r.bookmarkFolder || 'Vid';
 
     this.set = {
       checkInterval: r.checkInterval || 15,
@@ -123,12 +165,16 @@ class FeedApp {
 
     // Update DOM inputs
     this.D.fTime.value = this.timeFilter;
+    if (this.D.fContent) this.D.fContent.value = this.contentFilter;
     this.D.fSort.value = this.sortMode;
     this.D.btnHw.classList.toggle('active', this.hideWatched);
     this.D.setInt.value = this.set.checkInterval;
     this.D.setOpen.value = this.set.autoOpen;
     this.D.setHw.checked = this.hideWatched;
     this.D.setNotif.checked = this.set.notifications;
+    if (this.D.setFolder) this.D.setFolder.value = this.bookmarkFolder;
+
+    this.updateViewModeButtons();
   }
 
   async loadData() {
@@ -144,10 +190,8 @@ class FeedApp {
     this.watchLaterMap = new Map(this.watchLaterList.map(v => [v.id, v]));
     this.watchedVideos = wvRes?.success ? wvRes.watchedVideos : (local.watchedVideos || {});
 
-    // Flatten channel videos
     this.aggregateChannelVideos();
 
-    // Update badges
     this.D.wlBadge.textContent = this.watchLaterList.length;
     this.D.wvBadge.textContent = Object.keys(this.watchedVideos).length;
   }
@@ -206,6 +250,15 @@ class FeedApp {
     return baseTime - 864e5;
   }
 
+  parseDurationSeconds(durStr) {
+    if (!durStr) return 0;
+    const parts = durStr.trim().split(':').map(Number);
+    if (parts.some(isNaN)) return 0;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parts[0] || 0;
+  }
+
   // ─── Filtering & Sorting ──────────────────────────────────
 
   getTimeCutoff() {
@@ -258,6 +311,30 @@ class FeedApp {
       vids = vids.filter(v => !this.watchedVideos[v.id]);
     }
 
+    // Format / Duration Filter
+    if (this.contentFilter !== 'all') {
+      vids = vids.filter(v => {
+        const durSec = this.parseDurationSeconds(v.duration);
+        const isShort = v.isShort || (durSec > 0 && durSec < 60 && !v.duration.includes(':'));
+        switch (this.contentFilter) {
+          case 'no-shorts':
+            return !v.isShort && durSec >= 60;
+          case 'shorts':
+            return isShort;
+          case 'quick':
+            return durSec > 0 && durSec < 300;
+          case 'standard':
+            return durSec >= 300 && durSec <= 1200;
+          case 'long':
+            return durSec > 1200;
+          case 'live':
+            return !!v.isLive;
+          default:
+            return true;
+        }
+      });
+    }
+
     // Channel chip filter
     if (this.activeChannelChip === 'new') {
       vids = vids.filter(v => v.isNew);
@@ -300,8 +377,29 @@ class FeedApp {
     this.buildChannelChips();
     this.displayedCount = 0;
     this.D.feed.innerHTML = '';
-    this.renderMore();
+    this.D.feed.className = `feed view-${this.viewMode}`;
+
+    if (this.viewMode === 'swimlane' && this.view === 'channels') {
+      this.renderSwimlanes();
+    } else {
+      this.renderMore();
+    }
+
     this.updateStats();
+  }
+
+  updateViewModeButtons() {
+    this.D.viewGrid?.classList.toggle('active', this.viewMode === 'grid');
+    this.D.viewCompact?.classList.toggle('active', this.viewMode === 'compact');
+    this.D.viewSwimlane?.classList.toggle('active', this.viewMode === 'swimlane');
+  }
+
+  switchViewMode(mode) {
+    if (this.viewMode === mode) return;
+    this.viewMode = mode;
+    chrome.storage.sync.set({ feedViewMode: mode });
+    this.updateViewModeButtons();
+    this.updateUI();
   }
 
   buildChannelChips() {
@@ -312,7 +410,6 @@ class FeedApp {
     this.D.chipScroll.parentElement.style.display = 'block';
 
     const cutoff = this.getTimeCutoff();
-    // Channels with video counts matching time filter
     const channelCounts = new Map();
     let newCount = 0;
     for (const v of this.allChannelVideos) {
@@ -365,6 +462,52 @@ class FeedApp {
     this.displayedCount = end;
   }
 
+  renderSwimlanes() {
+    if (this.filteredVideos.length === 0) {
+      this.showEmpty();
+      return;
+    }
+
+    // Group by channel
+    const groups = new Map();
+    for (const v of this.filteredVideos) {
+      if (!groups.has(v.channelTitle)) groups.set(v.channelTitle, []);
+      groups.get(v.channelTitle).push(v);
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    for (const [channelTitle, vids] of groups.entries()) {
+      const groupEl = document.createElement('section');
+      groupEl.className = 'swimlane-group';
+
+      const color = this.channelColors.get(channelTitle) || '#555';
+      const initial = (channelTitle || '?')[0];
+
+      groupEl.innerHTML = `
+        <div class="swimlane-header">
+          <div class="swimlane-title-wrap">
+            <div class="card-avatar" style="background:${color};width:28px;height:28px;font-size:12px;">${this.esc(initial)}</div>
+            <h2 class="swimlane-title" data-channel="${this.esc(channelTitle)}">${this.esc(channelTitle)}</h2>
+            <span class="swimlane-count">${vids.length}</span>
+          </div>
+        </div>
+        <div class="swimlane-row"></div>
+      `;
+
+      const rowEl = groupEl.querySelector('.swimlane-row');
+      for (let i = 0; i < vids.length; i++) {
+        const card = this.createCard(vids[i], i);
+        rowEl.appendChild(card);
+      }
+
+      fragment.appendChild(groupEl);
+    }
+
+    this.D.feed.appendChild(fragment);
+    this.displayedCount = this.filteredVideos.length;
+  }
+
   createCard(v, index) {
     const isWatched = !!this.watchedVideos[v.id];
     const inWL = this.watchLaterMap.has(v.id);
@@ -378,7 +521,7 @@ class FeedApp {
     card.dataset.channelUrl = v.channelUrl || '';
     card.dataset.channelTitle = v.channelTitle || '';
     card.tabIndex = 0;
-    card.style.animationDelay = `${(index % PAGE_SIZE) * 25}ms`;
+    card.style.animationDelay = `${(index % PAGE_SIZE) * 20}ms`;
 
     const thumb = v.thumbnail || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
     const duration = v.duration || '';
@@ -388,11 +531,17 @@ class FeedApp {
 
     card.innerHTML = `
       <div class="card-thumb">
-        <img src="${this.esc(thumb)}" alt="" loading="lazy">
+        <img src="${this.esc(thumb)}" data-static-src="${this.esc(thumb)}" alt="" loading="lazy">
         ${duration ? `<span class="card-duration">${this.esc(duration)}</span>` : ''}
         ${v.isLive ? `<span class="card-badge live">LIVE</span>` : ''}
         ${v.isNew ? `<span class="card-badge new-badge">NEW</span>` : ''}
         <div class="card-actions">
+          <button class="card-action play-action" title="Play Video in In-Feed Modal" data-id="${v.id}">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="card-action ai-action" title="On-Device AI Video Summary" data-id="${v.id}">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9.5 2l1.6 4.9L16 8.5l-4.9 1.6L9.5 15l-1.6-4.9L3 8.5l4.9-1.6L9.5 2zm8 10l.9 2.7 2.7.9-2.7.9-.9 2.7-.9-2.7L13.8 15.6l2.7-.9.9-2.7z"/></svg>
+          </button>
           <button class="card-action wl-action${inWL ? ' is-active' : ''}" title="${inWL ? 'Remove from' : 'Add to'} Watch Later" data-id="${v.id}">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
           </button>
@@ -409,7 +558,31 @@ class FeedApp {
           <span class="card-stats">${this.esc(stats)}</span>
         </div>
       </div>`;
+
+    this.attachHoverPreview(card, v.id);
     return card;
+  }
+
+  attachHoverPreview(card, videoId) {
+    const img = card.querySelector('.card-thumb img');
+    if (!img) return;
+
+    let timer = null;
+    const animatedSrc = `https://i.ytimg.com/an_webp/${videoId}/mqdefault_6s.webp?du=6000&p=0`;
+
+    card.addEventListener('mouseenter', () => {
+      timer = setTimeout(() => {
+        img.src = animatedSrc;
+      }, 250);
+    });
+
+    card.addEventListener('mouseleave', () => {
+      clearTimeout(timer);
+      const staticSrc = img.dataset.staticSrc;
+      if (staticSrc && img.src !== staticSrc) {
+        img.src = staticSrc;
+      }
+    });
   }
 
   showSkeletons() {
@@ -428,7 +601,7 @@ class FeedApp {
         <div class="empty-state">
           <div class="empty-icon">📺</div>
           <h2>No Videos Stored Yet</h2>
-          <p>Make sure your YouTube channels are in the <strong>"Vid"</strong> bookmarks folder, then click Check Now to scan.</p>
+          <p>Make sure your YouTube channels are inside your configured bookmark folder (<strong>"${this.esc(this.bookmarkFolder)}"</strong>), then click Check Now to scan.</p>
           <button class="btn primary scan-now-btn" style="margin-top:16px;">⟳ Check Now</button>
         </div>`;
       return;
@@ -439,7 +612,7 @@ class FeedApp {
         <div class="empty-state">
           <div class="empty-icon">🕰</div>
           <h2>Watch Later is Empty</h2>
-          <p>Add videos by clicking the clock icon on any card.</p>
+          <p>Add videos by clicking the clock icon on any video card.</p>
         </div>`;
       return;
     }
@@ -449,7 +622,7 @@ class FeedApp {
         <div class="empty-state">
           <div class="empty-icon">👁️</div>
           <h2>No Watched Videos</h2>
-          <p>Videos you mark as watched will appear here.</p>
+          <p>Videos you mark as watched (or finish watching on YouTube) appear here.</p>
         </div>`;
       return;
     }
@@ -457,9 +630,9 @@ class FeedApp {
     this.D.feed.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🔍</div>
-        <h2>No Videos Match Your Filter</h2>
-        <p>Try switching to <strong>Last month</strong> or <strong>All time</strong>, or clear your search.</p>
-        <button class="btn primary clear-filters-btn" style="margin-top:16px;">Show All Time</button>
+        <h2>No Videos Match Current Filters</h2>
+        <p>Try switching format to <strong>All Formats</strong>, time to <strong>All time</strong>, or clear your search.</p>
+        <button class="btn primary clear-filters-btn" style="margin-top:16px;">Reset All Filters</button>
       </div>`;
   }
 
@@ -482,6 +655,17 @@ class FeedApp {
     this.D.sTotal.textContent = this.filteredVideos.length;
   }
 
+  async populateFolderSuggestions() {
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'getBookmarkFolders' });
+      if (res?.success && Array.isArray(res.folders) && this.D.folderSuggestions) {
+        this.D.folderSuggestions.innerHTML = res.folders
+          .map(f => `<option value="${this.esc(f.title)}"></option>`)
+          .join('');
+      }
+    } catch {}
+  }
+
   // ─── Events ───────────────────────────────────────────────
 
   setupEvents() {
@@ -490,10 +674,22 @@ class FeedApp {
     this.D.tabWl.addEventListener('click', () => this.switchView('watchLater'));
     this.D.tabWv.addEventListener('click', () => this.switchView('watched'));
 
+    // View Switcher
+    this.D.viewGrid?.addEventListener('click', () => this.switchViewMode('grid'));
+    this.D.viewCompact?.addEventListener('click', () => this.switchViewMode('compact'));
+    this.D.viewSwimlane?.addEventListener('click', () => this.switchViewMode('swimlane'));
+
     // Time filter dropdown
     this.D.fTime.addEventListener('change', e => {
       this.timeFilter = e.target.value;
       chrome.storage.sync.set({ timeFilter: e.target.value });
+      this.updateUI();
+    });
+
+    // Content filter dropdown
+    this.D.fContent?.addEventListener('change', e => {
+      this.contentFilter = e.target.value;
+      chrome.storage.sync.set({ contentFilter: e.target.value });
       this.updateUI();
     });
 
@@ -525,10 +721,18 @@ class FeedApp {
     // Refresh / Check Now
     this.D.btnCheck.addEventListener('click', () => this.checkNow());
 
-    // Settings
+    // Settings Modal
     this.D.btnSettings.addEventListener('click', () => this.toggleSettings(true));
     this.D.closeSettings.addEventListener('click', () => this.toggleSettings(false));
     this.D.settingsBackdrop.addEventListener('click', () => this.toggleSettings(false));
+
+    this.D.setFolder?.addEventListener('change', e => {
+      const val = e.target.value.trim() || 'Vid';
+      this.bookmarkFolder = val;
+      chrome.storage.sync.set({ bookmarkFolder: val });
+      this.toast(`Monitoring folder: ${val}`, 'info');
+      this.checkNow();
+    });
 
     this.D.setInt.addEventListener('change', e => {
       this.set.checkInterval = parseInt(e.target.value);
@@ -552,6 +756,28 @@ class FeedApp {
     this.D.btnCw.addEventListener('click', () => this.clearWatched());
     this.D.btnCd.addEventListener('click', () => this.clearCache());
 
+    // Player Modal Controls
+    this.D.closePlayer?.addEventListener('click', () => this.closePlayerModal());
+    this.D.playerBackdrop?.addEventListener('click', () => this.closePlayerModal());
+    this.D.playerPip?.addEventListener('click', () => this.openInDocumentPiP());
+    this.D.playerOpenTab?.addEventListener('click', () => {
+      if (this.currentPlayingVideo?.url) {
+        chrome.tabs.create({ url: this.currentPlayingVideo.url, active: true });
+        this.closePlayerModal();
+      }
+    });
+
+    // AI Modal Controls
+    this.D.closeAi?.addEventListener('click', () => this.toggleAIModal(false));
+    this.D.aiBackdrop?.addEventListener('click', () => this.toggleAIModal(false));
+    this.D.aiCopyBtn?.addEventListener('click', () => this.copyAISummary());
+    this.D.aiPlayBtn?.addEventListener('click', () => {
+      if (this.currentAIVideo) {
+        this.toggleAIModal(false);
+        this.openPlayerModal(this.currentAIVideo);
+      }
+    });
+
     // Channel chips click
     this.D.chipScroll.addEventListener('click', e => {
       const chip = e.target.closest('.chip');
@@ -562,21 +788,23 @@ class FeedApp {
       this.updateUI();
     });
 
-    // Image fallback (CSP-compliant capture listener, zero inline handlers)
+    // Image fallback
     this.D.feed.addEventListener('error', e => {
       if (e.target && e.target.tagName === 'IMG') {
         e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"><rect fill="%23272727" width="16" height="9"/></svg>';
       }
     }, true);
 
-    // Feed clicks (delegated)
+    // Delegated Feed clicks
     this.D.feed.addEventListener('click', e => {
       const target = e.target;
 
       if (target.closest('.clear-filters-btn')) {
         this.timeFilter = 'all';
+        this.contentFilter = 'all';
         this.D.fTime.value = 'all';
-        chrome.storage.sync.set({ timeFilter: 'all' });
+        if (this.D.fContent) this.D.fContent.value = 'all';
+        chrome.storage.sync.set({ timeFilter: 'all', contentFilter: 'all' });
         this.activeChannelChip = 'all';
         this.searchQuery = '';
         this.D.search.value = '';
@@ -586,6 +814,32 @@ class FeedApp {
 
       if (target.closest('.scan-now-btn')) {
         this.checkNow();
+        return;
+      }
+
+      const playBtn = target.closest('.play-action');
+      if (playBtn) {
+        e.stopPropagation();
+        const card = playBtn.closest('.card');
+        this.openPlayerModal({
+          id: playBtn.dataset.id,
+          url: card?.dataset.url,
+          title: card?.querySelector('.card-title')?.textContent || 'Playing Video',
+        });
+        return;
+      }
+
+      const aiBtn = target.closest('.ai-action');
+      if (aiBtn) {
+        e.stopPropagation();
+        const card = aiBtn.closest('.card');
+        this.openAISummary({
+          id: aiBtn.dataset.id,
+          url: card?.dataset.url,
+          title: card?.querySelector('.card-title')?.textContent || 'Video',
+          channelTitle: card?.dataset.channelTitle || '',
+          thumbnail: card?.querySelector('.card-thumb img')?.dataset.staticSrc || card?.querySelector('.card-thumb img')?.src || '',
+        });
         return;
       }
 
@@ -603,17 +857,30 @@ class FeedApp {
         return;
       }
 
-      const chLink = target.closest('.card-channel');
+      const chLink = target.closest('.card-channel') || target.closest('.swimlane-title');
       if (chLink) {
         e.stopPropagation();
         const url = chLink.dataset.channelUrl;
-        if (url) chrome.tabs.create({ url, active: true });
+        if (url) {
+          chrome.tabs.create({ url, active: true });
+        } else if (chLink.dataset.channel) {
+          this.activeChannelChip = chLink.dataset.channel;
+          this.updateUI();
+        }
         return;
       }
 
       const card = target.closest('.card');
       if (card && card.dataset.url) {
-        this.openVideo(card.dataset.url, card.dataset.id);
+        if (this.set.autoOpen === 'modal') {
+          this.openPlayerModal({
+            id: card.dataset.id,
+            url: card.dataset.url,
+            title: card.querySelector('.card-title')?.textContent || 'Playing Video'
+          });
+        } else {
+          this.openVideo(card.dataset.url, card.dataset.id);
+        }
       }
     });
   }
@@ -625,16 +892,24 @@ class FeedApp {
     this.D.tabWl.classList.toggle('active', vw === 'watchLater');
     this.D.tabWv.classList.toggle('active', vw === 'watched');
 
-    // Time filter & chip bar only apply to 'channels'
-    this.D.fTime.style.display = vw === 'channels' ? 'inline-block' : 'none';
-    this.D.btnHw.style.display = vw === 'channels' ? 'inline-flex' : 'none';
+    // Controls visibility
+    const isCh = vw === 'channels';
+    this.D.fTime.style.display = isCh ? 'inline-block' : 'none';
+    if (this.D.fContent) this.D.fContent.style.display = isCh ? 'inline-block' : 'none';
+    this.D.btnHw.style.display = isCh ? 'inline-flex' : 'none';
+    this.D.viewSwimlane.style.display = isCh ? 'inline-flex' : 'none';
+
+    if (this.viewMode === 'swimlane' && !isCh) {
+      this.viewMode = 'grid';
+      this.updateViewModeButtons();
+    }
 
     this.updateUI();
   }
 
   setupInfiniteScroll() {
     this.observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && this.displayedCount < this.filteredVideos.length) {
+      if (entries[0].isIntersecting && this.viewMode !== 'swimlane' && this.displayedCount < this.filteredVideos.length) {
         this.renderMore();
       }
     }, { rootMargin: '400px' });
@@ -645,6 +920,14 @@ class FeedApp {
     document.addEventListener('keydown', e => {
       if (!this.D.settingsOverlay.classList.contains('hidden')) {
         if (e.key === 'Escape') this.toggleSettings(false);
+        return;
+      }
+      if (!this.D.playerModal.classList.contains('hidden')) {
+        if (e.key === 'Escape') this.closePlayerModal();
+        return;
+      }
+      if (!this.D.aiModal.classList.contains('hidden')) {
+        if (e.key === 'Escape') this.toggleAIModal(false);
         return;
       }
 
@@ -677,6 +960,32 @@ class FeedApp {
           if (!isInput) {
             const focused = this.getFocusedCard();
             if (focused?.dataset.url) this.openVideo(focused.dataset.url, focused.dataset.id);
+          }
+          break;
+        case 'p':
+          if (!isInput) {
+            const focused = this.getFocusedCard();
+            if (focused?.dataset.id) {
+              this.openPlayerModal({
+                id: focused.dataset.id,
+                url: focused.dataset.url,
+                title: focused.querySelector('.card-title')?.textContent || 'Video'
+              });
+            }
+          }
+          break;
+        case 's':
+          if (!isInput) {
+            const focused = this.getFocusedCard();
+            if (focused?.dataset.id) {
+              this.openAISummary({
+                id: focused.dataset.id,
+                url: focused.dataset.url,
+                title: focused.querySelector('.card-title')?.textContent || 'Video',
+                channelTitle: focused.dataset.channelTitle || '',
+                thumbnail: focused.querySelector('.card-thumb img')?.dataset.staticSrc || ''
+              });
+            }
           }
           break;
         case 'w':
@@ -713,6 +1022,11 @@ class FeedApp {
           this.D.fTime.value = this.timeFilter;
           this.updateUI();
         }
+        if (changes.contentFilter && this.D.fContent) {
+          this.contentFilter = changes.contentFilter.newValue;
+          this.D.fContent.value = this.contentFilter;
+          this.updateUI();
+        }
         if (changes.hideWatched) {
           this.hideWatched = !!changes.hideWatched.newValue;
           this.D.btnHw.classList.toggle('active', this.hideWatched);
@@ -723,6 +1037,15 @@ class FeedApp {
           this.sortMode = changes.feedSort.newValue;
           this.D.fSort.value = this.sortMode;
           this.updateUI();
+        }
+        if (changes.feedViewMode) {
+          this.viewMode = changes.feedViewMode.newValue;
+          this.updateViewModeButtons();
+          this.updateUI();
+        }
+        if (changes.bookmarkFolder) {
+          this.bookmarkFolder = changes.bookmarkFolder.newValue || 'Vid';
+          if (this.D.setFolder) this.D.setFolder.value = this.bookmarkFolder;
         }
       }
     });
@@ -743,7 +1066,7 @@ class FeedApp {
     cards[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  // ─── Actions ──────────────────────────────────────────────
+  // ─── Video Actions ────────────────────────────────────────
 
   async openVideo(url, videoId) {
     if (videoId && !this.watchedVideos[videoId]) {
@@ -765,6 +1088,162 @@ class FeedApp {
     }
   }
 
+  openPlayerModal(video) {
+    this.currentPlayingVideo = video;
+    this.D.playerTitle.textContent = video.title || 'Playing Video';
+    this.D.playerIframe.src = `https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1`;
+    this.D.playerModal.classList.remove('hidden');
+
+    // Auto mark watched
+    if (video.id && !this.watchedVideos[video.id]) {
+      this.watchedVideos[video.id] = Date.now();
+      chrome.runtime.sendMessage({ action: 'markVideoWatched', videoId: video.id }).catch(() => {});
+      const card = this.D.feed.querySelector(`.card[data-id="${video.id}"]`);
+      if (card) {
+        card.classList.add('watched-card');
+        card.querySelector('.watched-action')?.classList.add('is-active');
+      }
+      this.D.wvBadge.textContent = Object.keys(this.watchedVideos).length;
+    }
+  }
+
+  closePlayerModal() {
+    this.D.playerIframe.src = '';
+    this.D.playerModal.classList.add('hidden');
+    this.currentPlayingVideo = null;
+  }
+
+  async openInDocumentPiP() {
+    if (!this.currentPlayingVideo) return;
+    const { id, title } = this.currentPlayingVideo;
+
+    if ('documentPictureInPicture' in window) {
+      try {
+        const pipWindow = await window.documentPictureInPicture.requestWindow({
+          width: 560,
+          height: 315,
+        });
+
+        pipWindow.document.body.innerHTML = `
+          <style>
+            body { margin: 0; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
+            iframe { width: 100%; height: 100%; border: none; }
+          </style>
+          <iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        `;
+        this.closePlayerModal();
+        this.toast('Playing in Document PiP window', 'info');
+        return;
+      } catch (e) {
+        console.warn('PiP request failed:', e);
+      }
+    }
+
+    // Fallback: open background or tab
+    chrome.tabs.create({ url: `https://www.youtube.com/watch?v=${id}`, active: false });
+    this.toast('Opened in background tab', 'info');
+  }
+
+  // ─── On-Device AI Summarizer ──────────────────────────────
+
+  async openAISummary(video) {
+    this.currentAIVideo = video;
+    this.toggleAIModal(true);
+
+    this.D.aiVideoPreview.innerHTML = `
+      <img src="${this.esc(video.thumbnail)}" alt="">
+      <div class="ai-preview-meta">
+        <h3>${this.esc(video.title)}</h3>
+        <span>${this.esc(video.channelTitle)}</span>
+      </div>
+    `;
+
+    this.D.aiLoader.classList.remove('hidden');
+    this.D.aiResult.classList.add('hidden');
+    this.D.aiCopyBtn.style.display = 'none';
+
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        action: 'getVideoTranscript',
+        videoId: video.id
+      });
+
+      const transcript = resp?.success ? resp.transcript : null;
+      let coreSummary = '';
+      let bullets = [];
+
+      // Attempt Chrome Built-in AI (Prompt API / Gemini Nano)
+      if (window.ai?.languageModel) {
+        try {
+          const session = await window.ai.languageModel.create({
+            systemPrompt: "You are a concise video analyst. For the provided YouTube transcript or metadata, produce a 1-sentence Core Thesis and exactly 3 Key Takeaways."
+          });
+
+          const promptText = transcript
+            ? `Transcript excerpt: "${transcript.slice(0, 3500)}". Summarize in 1 core sentence and 3 bullet points.`
+            : `Title: "${video.title}", Channel: "${video.channelTitle}". Summarize key expectations in 1 sentence and 3 bullet points.`;
+
+          const aiText = await session.prompt(promptText);
+          const lines = aiText.split('\n').filter(l => l.trim().length > 0);
+
+          coreSummary = lines[0]?.replace(/^core thesis:?/i, '').replace(/^summary:?/i, '').trim();
+          bullets = lines.slice(1).map(l => l.replace(/^[-*•\d.]+\s*/, '').trim()).filter(Boolean).slice(0, 3);
+        } catch (aiErr) {
+          console.warn('Chrome AI Prompt API encountered error, falling back:', aiErr);
+        }
+      }
+
+      // Smart heuristic fallback if AI not enabled or transcript limited
+      if (!coreSummary) {
+        if (transcript) {
+          const sentences = transcript.split('. ').filter(s => s.trim().length > 25);
+          coreSummary = sentences[0] ? sentences[0].trim() + '.' : `Summary for "${video.title}".`;
+          bullets = [
+            sentences[1] ? sentences[1].trim() + '.' : 'Comprehensive discussion of core concepts.',
+            sentences[2] ? sentences[2].trim() + '.' : 'Practical demonstrations and walkthroughs.',
+            sentences[3] ? sentences[3].trim() + '.' : 'Key takeaways, conclusions, and next steps.'
+          ];
+        } else {
+          coreSummary = `Direct captions are disabled for this upload.`;
+          bullets = [
+            `Creator: ${video.channelTitle}`,
+            `Video Title: "${video.title}"`,
+            `💡 Enable Chrome Gemini Nano via chrome://flags/#prompt-api-for-gemini-nano for on-device summaries.`
+          ];
+        }
+      }
+
+      this.D.aiCoreTakeaway.textContent = coreSummary;
+      this.D.aiBullets.innerHTML = bullets.map(b => `<li>${this.esc(b)}</li>`).join('');
+
+      this.D.aiLoader.classList.add('hidden');
+      this.D.aiResult.classList.remove('hidden');
+      this.D.aiCopyBtn.style.display = 'inline-flex';
+    } catch (e) {
+      this.D.aiLoader.innerHTML = `<p style="color:var(--accent-danger)">Failed to generate summary: ${this.esc(e.message)}</p>`;
+    }
+  }
+
+  toggleAIModal(show) {
+    this.D.aiModal.classList.toggle('hidden', !show);
+    if (!show) this.currentAIVideo = null;
+  }
+
+  copyAISummary() {
+    const title = this.currentAIVideo?.title || 'YouTube Video';
+    const core = this.D.aiCoreTakeaway.textContent;
+    const bullets = Array.from(this.D.aiBullets.querySelectorAll('li')).map(li => `• ${li.textContent}`).join('\n');
+    const text = `**${title}**\n\n${core}\n\n${bullets}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      this.toast('Summary copied to clipboard!', 'success');
+    }).catch(() => {
+      this.toast('Copy failed', 'error');
+    });
+  }
+
+  // ─── Watch Later & Watched Toggles ────────────────────────
+
   async toggleWatchLater(btn) {
     const id = btn.dataset.id;
     btn.disabled = true;
@@ -783,7 +1262,7 @@ class FeedApp {
           title: card.querySelector('.card-title')?.textContent || '',
           channelTitle: card.dataset.channelTitle || '',
           published: card.querySelector('.card-stats')?.textContent || '',
-          thumbnail: card.querySelector('.card-thumb img')?.src || '',
+          thumbnail: card.querySelector('.card-thumb img')?.dataset.staticSrc || card.querySelector('.card-thumb img')?.src || '',
         };
         await chrome.runtime.sendMessage({ action: 'addToWatchLater', video });
         this.watchLaterMap.set(id, video);

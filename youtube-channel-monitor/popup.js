@@ -21,7 +21,7 @@ const D=document,g=id=>D.getElementById(id);
 this.D={res:g('res'),sbar:g('s-bar'),sCh:g('s-ch'),sNew:g('s-new'),sTotal:g('s-total'),stText:g('st-text'),
 ind:g('ind'),tabCh:g('tab-ch'),tabWl:g('tab-wl'),tabWv:g('tab-wv'),btnCheck:g('btn-check'),fTime:g('f-time'),
 fSort:g('f-sort'),fSearch:g('f-search'),fHwCb:g('f-hw-cb'),btnCw:g('btn-cw'),setInt:g('set-int'),
-setNotif:g('set-notif'),setOpen:g('set-open'),controlSet:[g('filter-controls')],btnSettings:g('btn-settings'),
+setFolder:g('set-folder'),setNotif:g('set-notif'),setOpen:g('set-open'),controlSet:[g('filter-controls')],btnSettings:g('btn-settings'),
 settingsPanel:g('settings-panel'),btnToggleAll:g('btn-toggle-all'),btnFeed:g('btn-feed')};
 }
 async init(){
@@ -51,13 +51,14 @@ await Promise.all([this.loadWV(),this.loadWL(),this.loadChRes()]);
 if(upd){this.presStates=false;this.updateUI();this.presStates=true;}
 }
 async loadSettings(){
-const r=await chrome.storage.sync.get(['checkInterval','timeFilter','notifications','autoOpen','hideWatched','mutedChannels']);
+const r=await chrome.storage.sync.get(['checkInterval','timeFilter','notifications','autoOpen','hideWatched','mutedChannels','bookmarkFolder']);
 this.set={checkInterval:r.checkInterval||15,notifications:!!r.notifications,autoOpen:r.autoOpen||'current'};
-this.tf=r.timeFilter||'1day';this.hideW=!!r.hideWatched;
+this.tf=r.timeFilter||'1day';this.hideW=!!r.hideWatched;this.bookmarkFolder=r.bookmarkFolder||'Vid';
 this.mutedCh=new Set(Array.isArray(r.mutedChannels)?r.mutedChannels:[]);
-const{setInt,fTime,setNotif,fHwCb,setOpen}=this.D;
+const{setInt,fTime,setNotif,fHwCb,setOpen,setFolder}=this.D;
 setInt.value=this.set.checkInterval;fTime.value=this.tf;setNotif.checked=this.set.notifications;
 fHwCb.checked=this.hideW;setOpen.value=this.set.autoOpen;
+if(setFolder)setFolder.value=this.bookmarkFolder;
 }
 async loadWV(){
 try{const r=await chrome.runtime.sendMessage({action:'getWatchedVideos'});this.wv=r?.success?r.watchedVideos:(await chrome.storage.local.get('watchedVideos')).watchedVideos||{};}
@@ -125,6 +126,7 @@ if(chH&&!t.closest('.vid'))chH.parentElement.classList.toggle('collapsed');
 btnCw.addEventListener('click',()=>this.clearWV());
 document.getElementById('set-cd').addEventListener('click',()=>this.clearData());
 setInt.addEventListener('change',e=>this.saveSetting('checkInterval',parseInt(e.target.value)));
+if(this.D.setFolder)this.D.setFolder.addEventListener('change',e=>this.saveSetting('bookmarkFolder',e.target.value.trim()||'Vid'));
 setNotif.addEventListener('change',e=>this.saveSetting('notifications',e.target.checked));
 setOpen.addEventListener('change',e=>this.saveSetting('autoOpen',e.target.value));
 this.D.res.addEventListener('change',(e)=>{
